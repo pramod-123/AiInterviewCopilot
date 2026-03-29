@@ -1,0 +1,12 @@
+# When the Git repo root is the monorepo (`AiInterviewCopilot/`), see root `.gitignore`.
+# This file remains for standalone `server/` checkouts or tooling that only reads this folder.
+
+node_modules/
+dist/
+coverage/
+data/
+.env
+*.log
+
+media/*
+!media/.gitkeep

@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../data/app.db"
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Where this timed text came from (mic/STT vs screen OCR).
+enum TranscriptSource {
+  AUDIO_STT
+  VIDEO_OCR
+}
+
+model Job {
+  id           String    @id @default(uuid())
+  status       JobStatus @default(PENDING)
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  interviewAudio      InterviewAudio?
+  interviewVideo      InterviewVideo?
+  transcriptSegments  TranscriptSegment[]
+  result              Result?
+}
+
+/// Uploaded audio artifact (file on disk). Timed speech text lives in TranscriptSegment (source AUDIO_STT).
+model InterviewAudio {
+  id               String   @id @default(uuid())
+  jobId            String   @unique
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  filePath         String
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  durationSeconds  Float?
+  createdAt        DateTime @default(now())
+}
+
+/// Uploaded interview recording (video). Full pipeline writes derived WAV under uploads/<jobId>/pipeline/audio.wav.
+model InterviewVideo {
+  id               String   @id @default(uuid())
+  jobId            String   @unique
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  filePath         String
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  createdAt        DateTime @default(now())
+}
+
+/// One row per caption line or OCR snippet; times are milliseconds from the start of the interview/session timeline.
+model TranscriptSegment {
+  id        String           @id @default(uuid())
+  jobId     String
+  job       Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  source    TranscriptSource
+  startMs   Int
+  endMs     Int
+  text      String
+  sequence  Int              @default(0)
+  createdAt DateTime         @default(now())
+
+  @@index([jobId, source])
+}
+
+model Result {
+  id        String   @id @default(uuid())
+  jobId     String   @unique
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  payload   Json
+  createdAt DateTime @default(now())
+}

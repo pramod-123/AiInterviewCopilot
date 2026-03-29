@@ -1,0 +1,1 @@
+First frame of a technical interview screen recording. Transcribe any visible problem text, then return a **tight** bounding box around **only the code editor pane** (monospace typing area + line numbers), **not** the full window, problem description panel, browser UI, or video call overlays.

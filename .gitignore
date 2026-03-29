@@ -1,0 +1,18 @@
+.DS_Store
+*.log
+.env
+.env.*.local
+
+# Server app
+server/node_modules/
+server/dist/
+server/coverage/
+server/data/
+!server/media/.gitkeep
+server/media/*
+!server/media/.gitkeep
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
