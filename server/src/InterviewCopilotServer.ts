@@ -38,7 +38,21 @@ export class InterviewCopilotServer {
   }
 
   async registerPlugins(): Promise<void> {
-    await this.app.register(cors, { origin: true });
+    // Restrict CORS to localhost origins only (http/https on 127.0.0.1 or localhost, any port)
+    // and Chrome extension origins, which is all that should ever call this local-only server.
+    await this.app.register(cors, {
+      origin: (origin, cb) => {
+        if (
+          !origin ||
+          /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+          /^chrome-extension:\/\//.test(origin)
+        ) {
+          cb(null, true);
+        } else {
+          cb(new Error("CORS: origin not allowed"), false);
+        }
+      },
+    });
     await this.app.register(multipart, {
       limits: { fileSize: 500 * 1024 * 1024 },
     });
