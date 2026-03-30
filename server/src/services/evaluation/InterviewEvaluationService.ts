@@ -84,6 +84,8 @@ export class InterviewEvaluationService implements InterviewEvaluator {
         outputTokens: usage.outputTokens,
         totalTokens: usage.totalTokens,
       };
+      if (usage.cachedTokens) result.tokenUsage.cachedTokens = usage.cachedTokens;
+      if (usage.reasoningTokens) result.tokenUsage.reasoningTokens = usage.reasoningTokens;
     }
     return result;
   }

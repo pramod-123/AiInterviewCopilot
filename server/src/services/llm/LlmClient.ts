@@ -5,6 +5,10 @@ export type LlmTokenUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /** Cached input tokens (OpenAI prompt_tokens_details.cached_tokens). */
+  cachedTokens?: number;
+  /** Reasoning tokens used by reasoning models (OpenAI completion_tokens_details.reasoning_tokens). */
+  reasoningTokens?: number;
 };
 
 /** Result of an LLM completion call including the response text and optional token usage. */

@@ -1285,79 +1285,22 @@ body {
   color: var(--text-dim);
 }
 
-/* Token usage */
-.ic-token-usage-section {
-  margin-top: 1.5rem;
-}
-
-.ic-token-usage-section h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin: 0 0 0.75rem;
-  color: var(--text);
+/* Token usage metadata (faint, below Full result JSON) */
+.ic-token-meta {
+  margin-top: 0.75rem;
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.ic-token-usage-section h3::before {
-  content: "🔢";
-}
-
-.token-usage-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  border: 1px solid var(--border-dark);
-  border-radius: 14px;
-  overflow: hidden;
-  background: var(--surface-dark);
-}
-
-.token-usage-table thead tr {
-  background: rgba(10, 10, 11, 0.6);
-  color: var(--text-dim);
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-bottom: 1px solid var(--border-dark);
-}
-
-.token-usage-table th,
-.token-usage-table td {
-  padding: 12px 18px;
-  text-align: left;
-  vertical-align: middle;
-  border-bottom: 1px solid var(--border-dark);
-}
-
-.token-usage-table td:first-child {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.token-usage-table td:not(:first-child) {
+.ic-token-meta-line {
+  display: block;
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.token-usage-table .token-total {
-  color: var(--primary);
-  font-weight: 700;
-}
-
-.token-usage-table tbody tr:hover {
-  background: rgba(0, 255, 157, 0.04);
-}
-
-.token-usage-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.token-usage-total-row {
-  background: rgba(0, 255, 157, 0.06);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  opacity: 0.7;
 }
 
 /* Footer */

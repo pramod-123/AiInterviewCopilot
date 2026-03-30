@@ -417,112 +417,6 @@
       }
     }
 
-    const tokenUsage =
-      evaluation && evaluation.tokenUsage && typeof evaluation.tokenUsage === "object"
-        ? /** @type {Record<string, unknown>} */ (evaluation.tokenUsage)
-        : null;
-    const roiUsageRaw =
-      p.pipeline && typeof p.pipeline === "object"
-        ? /** @type {Record<string, unknown>} */ (p.pipeline)
-        : null;
-    const roiTokenUsage =
-      roiUsageRaw && roiUsageRaw.roiTokenUsage && typeof roiUsageRaw.roiTokenUsage === "object"
-        ? /** @type {Record<string, unknown>} */ (roiUsageRaw.roiTokenUsage)
-        : null;
-
-    if (tokenUsage || roiTokenUsage) {
-      const section = document.createElement("section");
-      section.className = "ic-token-usage-section";
-      const h3 = document.createElement("h3");
-      h3.textContent = "LLM token usage";
-      section.appendChild(h3);
-      const table = document.createElement("table");
-      table.className = "dim-table token-usage-table";
-      const thead = document.createElement("thead");
-      const hr = document.createElement("tr");
-      for (const label of ["Call", "Input tokens", "Output tokens", "Total tokens"]) {
-        const th = document.createElement("th");
-        th.textContent = label;
-        hr.appendChild(th);
-      }
-      thead.appendChild(hr);
-      table.appendChild(thead);
-      const tbody = document.createElement("tbody");
-
-      /**
-       * @param {string} label
-       * @param {Record<string, unknown>} usage
-       */
-      function addUsageRow(label, usage) {
-        const tr = document.createElement("tr");
-        const tdLabel = document.createElement("td");
-        tdLabel.textContent = label;
-        const tdIn = document.createElement("td");
-        tdIn.textContent =
-          typeof usage.inputTokens === "number" ? usage.inputTokens.toLocaleString() : "—";
-        const tdOut = document.createElement("td");
-        tdOut.textContent =
-          typeof usage.outputTokens === "number" ? usage.outputTokens.toLocaleString() : "—";
-        const tdTotal = document.createElement("td");
-        tdTotal.className = "token-total";
-        tdTotal.textContent =
-          typeof usage.totalTokens === "number" ? usage.totalTokens.toLocaleString() : "—";
-        tr.appendChild(tdLabel);
-        tr.appendChild(tdIn);
-        tr.appendChild(tdOut);
-        tr.appendChild(tdTotal);
-        tbody.appendChild(tr);
-      }
-
-      if (tokenUsage) {
-        const evalLabel =
-          evaluation && typeof evaluation.provider === "string" && typeof evaluation.model === "string"
-            ? `Evaluation (${evaluation.provider} / ${evaluation.model})`
-            : "Evaluation";
-        addUsageRow(evalLabel, tokenUsage);
-      }
-      if (roiTokenUsage) {
-        addUsageRow("Vision ROI", roiTokenUsage);
-      }
-
-      if (tokenUsage || roiTokenUsage) {
-        let totalIn = 0;
-        let totalOut = 0;
-        for (const u of [tokenUsage, roiTokenUsage]) {
-          if (u) {
-            totalIn += typeof u.inputTokens === "number" ? u.inputTokens : 0;
-            totalOut += typeof u.outputTokens === "number" ? u.outputTokens : 0;
-          }
-        }
-        if (tokenUsage && roiTokenUsage) {
-          const trTotal = document.createElement("tr");
-          trTotal.className = "token-usage-total-row";
-          const tdL = document.createElement("td");
-          tdL.textContent = "Total";
-          tdL.style.fontWeight = "600";
-          const tdI = document.createElement("td");
-          tdI.textContent = totalIn.toLocaleString();
-          tdI.style.fontWeight = "600";
-          const tdO = document.createElement("td");
-          tdO.textContent = totalOut.toLocaleString();
-          tdO.style.fontWeight = "600";
-          const tdT = document.createElement("td");
-          tdT.className = "token-total";
-          tdT.textContent = (totalIn + totalOut).toLocaleString();
-          tdT.style.fontWeight = "600";
-          trTotal.appendChild(tdL);
-          trTotal.appendChild(tdI);
-          trTotal.appendChild(tdO);
-          trTotal.appendChild(tdT);
-          tbody.appendChild(trTotal);
-        }
-      }
-
-      table.appendChild(tbody);
-      section.appendChild(table);
-      root.appendChild(section);
-    }
-
     if (evaluation) {
       if (richLayout) {
         appendEvaluationRich(root, evaluation);
@@ -540,6 +434,101 @@
     pre.textContent = JSON.stringify(payload, null, 2);
     details.appendChild(pre);
     root.appendChild(details);
+
+    const tokenUsage =
+      evaluation && evaluation.tokenUsage && typeof evaluation.tokenUsage === "object"
+        ? /** @type {Record<string, unknown>} */ (evaluation.tokenUsage)
+        : null;
+    const pipelineObj =
+      p.pipeline && typeof p.pipeline === "object"
+        ? /** @type {Record<string, unknown>} */ (p.pipeline)
+        : null;
+    const roiTokenUsage =
+      pipelineObj && pipelineObj.roiTokenUsage && typeof pipelineObj.roiTokenUsage === "object"
+        ? /** @type {Record<string, unknown>} */ (pipelineObj.roiTokenUsage)
+        : null;
+
+    if (tokenUsage || roiTokenUsage) {
+      const meta = document.createElement("div");
+      meta.className = "ic-token-meta";
+
+      /** @param {Record<string, unknown>} u */
+      function num(u, k) {
+        const v = u[k];
+        return typeof v === "number" && Number.isFinite(v) ? v : 0;
+      }
+
+      /** @param {string} model */
+      function contextWindowForModel(model) {
+        if (typeof model !== "string") return 0;
+        const m = model.toLowerCase();
+        if (m.includes("gpt-4o-mini")) return 128000;
+        if (m.includes("gpt-4o")) return 128000;
+        if (m.includes("gpt-4-turbo")) return 128000;
+        if (m.includes("gpt-4")) return 8192;
+        if (m.includes("gpt-3.5")) return 16385;
+        if (m.includes("o1-mini")) return 128000;
+        if (m.includes("o1")) return 200000;
+        if (m.includes("o3-mini")) return 200000;
+        if (m.includes("o3")) return 200000;
+        if (m.includes("claude-3-5-sonnet")) return 200000;
+        if (m.includes("claude-3-5-haiku")) return 200000;
+        if (m.includes("claude-3-opus")) return 200000;
+        if (m.includes("claude-3-sonnet")) return 200000;
+        if (m.includes("claude-3-haiku")) return 200000;
+        if (m.includes("claude")) return 200000;
+        return 0;
+      }
+
+      /**
+       * @param {string} label
+       * @param {Record<string, unknown>} usage
+       * @param {string | null | undefined} model
+       */
+      function buildUsageLine(label, usage, model) {
+        const inp = num(usage, "inputTokens");
+        const out = num(usage, "outputTokens");
+        const total = num(usage, "totalTokens") || inp + out;
+        const parts = [`${label}:`, `in ${inp.toLocaleString()}`, `out ${out.toLocaleString()}`, `total ${total.toLocaleString()}`];
+
+        const cached = num(usage, "cachedTokens");
+        if (cached > 0) parts.push(`(${cached.toLocaleString()} cached)`);
+        const reasoning = num(usage, "reasoningTokens");
+        if (reasoning > 0) parts.push(`(${reasoning.toLocaleString()} reasoning)`);
+
+        const ctx = contextWindowForModel(model);
+        if (ctx > 0 && total > 0) {
+          const pct = ((total / ctx) * 100).toFixed(1);
+          parts.push(`· ${pct}% of ${(ctx / 1000).toLocaleString()}k context`);
+        }
+        return parts.join(" ");
+      }
+
+      const lines = [];
+      if (tokenUsage) {
+        const model = evaluation && typeof evaluation.model === "string" ? evaluation.model : null;
+        const provider = evaluation && typeof evaluation.provider === "string" ? evaluation.provider : "";
+        const label = model ? `Evaluation (${provider}/${model})` : "Evaluation";
+        lines.push(buildUsageLine(label, tokenUsage, model));
+      }
+      if (roiTokenUsage) {
+        lines.push(buildUsageLine("Vision ROI", roiTokenUsage, null));
+      }
+
+      if (tokenUsage && roiTokenUsage) {
+        const totalIn = num(tokenUsage, "inputTokens") + num(roiTokenUsage, "inputTokens");
+        const totalOut = num(tokenUsage, "outputTokens") + num(roiTokenUsage, "outputTokens");
+        lines.push(`Combined: in ${totalIn.toLocaleString()}  out ${totalOut.toLocaleString()}  total ${(totalIn + totalOut).toLocaleString()}`);
+      }
+
+      for (const line of lines) {
+        const span = document.createElement("span");
+        span.className = "ic-token-meta-line";
+        span.textContent = line;
+        meta.appendChild(span);
+      }
+      root.appendChild(meta);
+    }
   }
 
   /**

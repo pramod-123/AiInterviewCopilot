@@ -49,6 +49,8 @@ export type EvaluationTokenUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
 };
 
 /**

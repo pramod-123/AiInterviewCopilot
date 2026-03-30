@@ -39,11 +39,20 @@ export class OpenAiLlmClient implements LlmClient {
 
   private static extractUsage(usage: OpenAI.CompletionUsage | undefined): LlmTokenUsage | undefined {
     if (!usage) return undefined;
-    return {
+    const result: LlmTokenUsage = {
       inputTokens: usage.prompt_tokens,
       outputTokens: usage.completion_tokens,
       totalTokens: usage.total_tokens,
     };
+    const cached = usage.prompt_tokens_details?.cached_tokens;
+    if (typeof cached === "number" && cached > 0) {
+      result.cachedTokens = cached;
+    }
+    const reasoning = usage.completion_tokens_details?.reasoning_tokens;
+    if (typeof reasoning === "number" && reasoning > 0) {
+      result.reasoningTokens = reasoning;
+    }
+    return result;
   }
 
   async completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult> {
