@@ -417,6 +417,112 @@
       }
     }
 
+    const tokenUsage =
+      evaluation && evaluation.tokenUsage && typeof evaluation.tokenUsage === "object"
+        ? /** @type {Record<string, unknown>} */ (evaluation.tokenUsage)
+        : null;
+    const roiUsageRaw =
+      p.pipeline && typeof p.pipeline === "object"
+        ? /** @type {Record<string, unknown>} */ (p.pipeline)
+        : null;
+    const roiTokenUsage =
+      roiUsageRaw && roiUsageRaw.roiTokenUsage && typeof roiUsageRaw.roiTokenUsage === "object"
+        ? /** @type {Record<string, unknown>} */ (roiUsageRaw.roiTokenUsage)
+        : null;
+
+    if (tokenUsage || roiTokenUsage) {
+      const section = document.createElement("section");
+      section.className = "ic-token-usage-section";
+      const h3 = document.createElement("h3");
+      h3.textContent = "LLM token usage";
+      section.appendChild(h3);
+      const table = document.createElement("table");
+      table.className = "dim-table token-usage-table";
+      const thead = document.createElement("thead");
+      const hr = document.createElement("tr");
+      for (const label of ["Call", "Input tokens", "Output tokens", "Total tokens"]) {
+        const th = document.createElement("th");
+        th.textContent = label;
+        hr.appendChild(th);
+      }
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+
+      /**
+       * @param {string} label
+       * @param {Record<string, unknown>} usage
+       */
+      function addUsageRow(label, usage) {
+        const tr = document.createElement("tr");
+        const tdLabel = document.createElement("td");
+        tdLabel.textContent = label;
+        const tdIn = document.createElement("td");
+        tdIn.textContent =
+          typeof usage.inputTokens === "number" ? usage.inputTokens.toLocaleString() : "—";
+        const tdOut = document.createElement("td");
+        tdOut.textContent =
+          typeof usage.outputTokens === "number" ? usage.outputTokens.toLocaleString() : "—";
+        const tdTotal = document.createElement("td");
+        tdTotal.className = "token-total";
+        tdTotal.textContent =
+          typeof usage.totalTokens === "number" ? usage.totalTokens.toLocaleString() : "—";
+        tr.appendChild(tdLabel);
+        tr.appendChild(tdIn);
+        tr.appendChild(tdOut);
+        tr.appendChild(tdTotal);
+        tbody.appendChild(tr);
+      }
+
+      if (tokenUsage) {
+        const evalLabel =
+          evaluation && typeof evaluation.provider === "string" && typeof evaluation.model === "string"
+            ? `Evaluation (${evaluation.provider} / ${evaluation.model})`
+            : "Evaluation";
+        addUsageRow(evalLabel, tokenUsage);
+      }
+      if (roiTokenUsage) {
+        addUsageRow("Vision ROI", roiTokenUsage);
+      }
+
+      if (tokenUsage || roiTokenUsage) {
+        let totalIn = 0;
+        let totalOut = 0;
+        for (const u of [tokenUsage, roiTokenUsage]) {
+          if (u) {
+            totalIn += typeof u.inputTokens === "number" ? u.inputTokens : 0;
+            totalOut += typeof u.outputTokens === "number" ? u.outputTokens : 0;
+          }
+        }
+        if (tokenUsage && roiTokenUsage) {
+          const trTotal = document.createElement("tr");
+          trTotal.className = "token-usage-total-row";
+          const tdL = document.createElement("td");
+          tdL.textContent = "Total";
+          tdL.style.fontWeight = "600";
+          const tdI = document.createElement("td");
+          tdI.textContent = totalIn.toLocaleString();
+          tdI.style.fontWeight = "600";
+          const tdO = document.createElement("td");
+          tdO.textContent = totalOut.toLocaleString();
+          tdO.style.fontWeight = "600";
+          const tdT = document.createElement("td");
+          tdT.className = "token-total";
+          tdT.textContent = (totalIn + totalOut).toLocaleString();
+          tdT.style.fontWeight = "600";
+          trTotal.appendChild(tdL);
+          trTotal.appendChild(tdI);
+          trTotal.appendChild(tdO);
+          trTotal.appendChild(tdT);
+          tbody.appendChild(trTotal);
+        }
+      }
+
+      table.appendChild(tbody);
+      section.appendChild(table);
+      root.appendChild(section);
+    }
+
     if (evaluation) {
       if (richLayout) {
         appendEvaluationRich(root, evaluation);

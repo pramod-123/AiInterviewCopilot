@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { PromptLoader } from "../prompts/PromptLoader.js";
-import type { LlmClient } from "../services/llm/LlmClient.js";
+import type { LlmClient, LlmTokenUsage } from "../services/llm/LlmClient.js";
 import type { VideoCropRect } from "./VideoProcessingPipeline.js";
 
 // --- PNG dimensions -----------------------------------------------------------
@@ -29,6 +29,8 @@ export type EditorRoiResult = {
   problemStatement: string | null;
   /** Non-empty model output; useful for debugging ROI vs. crop on disk. */
   rawResponseText?: string;
+  /** Token usage from the vision LLM call. */
+  tokenUsage?: LlmTokenUsage;
 };
 
 export type EditorRoiInput = {
@@ -290,7 +292,7 @@ export class EditorRoiDetectionService {
     const { width, height } = readPngDimensions(input.imagePath);
     const system = fillRoiSystemPrompt(this.systemTemplate, width, height);
 
-    const { text: content } = await this.llm.completeVisionJsonChat({
+    const { text: content, usage } = await this.llm.completeVisionJsonChat({
       system,
       userText: this.userTemplate,
       imagePngPath: input.imagePath,
@@ -302,6 +304,6 @@ export class EditorRoiDetectionService {
       return { crop: null, problemStatement: null };
     }
     const parsed = parseEditorRoiResponse(content, width, height);
-    return { ...parsed, rawResponseText: content.trim() };
+    return { ...parsed, rawResponseText: content.trim(), tokenUsage: usage };
   }
 }

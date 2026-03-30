@@ -1,9 +1,10 @@
 import fsPromises from "node:fs/promises";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
-import type { LlmClient, LlmJsonChatParams, LlmVisionJsonChatParams } from "./LlmClient.js";
+import type { LlmClient, LlmCompletionResult, LlmJsonChatParams, LlmTokenUsage, LlmVisionJsonChatParams } from "./LlmClient.js";
 
 type AnthropicMessageResponse = {
   content?: Array<{ type: string; text?: string }>;
+  usage?: { input_tokens?: number; output_tokens?: number };
 };
 
 /**
@@ -33,7 +34,14 @@ export class AnthropicLlmClient implements LlmClient {
     return new AnthropicLlmClient(key, modelId);
   }
 
-  async completeJsonChat(params: LlmJsonChatParams): Promise<{ text: string }> {
+  private static extractUsage(data: AnthropicMessageResponse): LlmTokenUsage | undefined {
+    if (!data.usage) return undefined;
+    const input = data.usage.input_tokens ?? 0;
+    const output = data.usage.output_tokens ?? 0;
+    return { inputTokens: input, outputTokens: output, totalTokens: input + output };
+  }
+
+  async completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult> {
     const system = `${params.system}\n\nYou must respond with a single valid JSON object only — no markdown fences, no explanation outside the JSON.`;
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -64,10 +72,10 @@ export class AnthropicLlmClient implements LlmClient {
     }
 
     const block = data.content?.find((c) => c.type === "text");
-    return { text: block?.text ?? "" };
+    return { text: block?.text ?? "", usage: AnthropicLlmClient.extractUsage(data) };
   }
 
-  async completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<{ text: string }> {
+  async completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<LlmCompletionResult> {
     const imageBytes = await fsPromises.readFile(params.imagePngPath);
     const system = `${params.system}\n\nYou must respond with a single valid JSON object only — no markdown fences, no explanation outside the JSON.`;
     const model = params.modelId ?? this.modelId;
@@ -115,7 +123,7 @@ export class AnthropicLlmClient implements LlmClient {
     }
 
     const block = data.content?.find((c) => c.type === "text");
-    return { text: block?.text ?? "" };
+    return { text: block?.text ?? "", usage: AnthropicLlmClient.extractUsage(data) };
   }
 
   async transcribeFromAudioFile(_audioFilePath: string): Promise<SpeechTranscription> {

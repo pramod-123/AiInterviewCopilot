@@ -60,7 +60,7 @@ export class InterviewEvaluationService implements InterviewEvaluator {
       "Interview evaluation prompts sent to LLM",
     );
 
-    const { text } = await this.llm.completeJsonChat({
+    const { text, usage } = await this.llm.completeJsonChat({
       system: systemPrompt,
       user: userContent,
       temperature: 0.4,
@@ -77,6 +77,14 @@ export class InterviewEvaluationService implements InterviewEvaluator {
       };
     }
 
-    return parseInterviewEvaluationJson(text, this.config.provider, modelId);
+    const result = parseInterviewEvaluationJson(text, this.config.provider, modelId);
+    if (usage) {
+      result.tokenUsage = {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+      };
+    }
+    return result;
   }
 }

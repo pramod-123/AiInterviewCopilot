@@ -219,6 +219,7 @@ export class VideoJobProcessor {
             : run.problemStatement,
         finalTranscript: run.finalTranscript,
         alignedTimeline: run.alignedTimeline,
+        roiTokenUsage: run.roiTokenUsage ?? null,
       },
     };
   }

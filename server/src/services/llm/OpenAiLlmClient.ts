@@ -1,7 +1,7 @@
 import fsPromises from "node:fs/promises";
 import type OpenAI from "openai";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
-import type { LlmClient, LlmJsonChatParams, LlmVisionJsonChatParams } from "./LlmClient.js";
+import type { LlmClient, LlmCompletionResult, LlmJsonChatParams, LlmTokenUsage, LlmVisionJsonChatParams } from "./LlmClient.js";
 import {
   DEFAULT_OPENAI_STT_MODEL,
   transcribeOneWavOpenAi,
@@ -37,7 +37,16 @@ export class OpenAiLlmClient implements LlmClient {
     return transcribeOneWavOpenAi(this.client, this.speechModelId, audioFilePath, "openai");
   }
 
-  async completeJsonChat(params: LlmJsonChatParams): Promise<{ text: string }> {
+  private static extractUsage(usage: OpenAI.CompletionUsage | undefined): LlmTokenUsage | undefined {
+    if (!usage) return undefined;
+    return {
+      inputTokens: usage.prompt_tokens,
+      outputTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+    };
+  }
+
+  async completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult> {
     const completion = await this.client.chat.completions.create({
       model: this.modelId,
       response_format: { type: "json_object" },
@@ -48,10 +57,10 @@ export class OpenAiLlmClient implements LlmClient {
       temperature: params.temperature ?? 0.4,
     });
     const text = completion.choices[0]?.message?.content ?? "";
-    return { text };
+    return { text, usage: OpenAiLlmClient.extractUsage(completion.usage) };
   }
 
-  async completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<{ text: string }> {
+  async completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<LlmCompletionResult> {
     const imageBytes = await fsPromises.readFile(params.imagePngPath);
     const dataUrl = `data:image/png;base64,${imageBytes.toString("base64")}`;
     const model = params.modelId ?? this.modelId;
@@ -74,6 +83,6 @@ export class OpenAiLlmClient implements LlmClient {
       temperature: params.temperature ?? 0.4,
     });
     const text = completion.choices[0]?.message?.content ?? "";
-    return { text };
+    return { text, usage: OpenAiLlmClient.extractUsage(completion.usage) };
   }
 }

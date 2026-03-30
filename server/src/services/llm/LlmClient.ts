@@ -1,5 +1,18 @@
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 
+/** Token counts from an LLM completion call. */
+export type LlmTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
+
+/** Result of an LLM completion call including the response text and optional token usage. */
+export type LlmCompletionResult = {
+  text: string;
+  usage?: LlmTokenUsage;
+};
+
 /**
  * Minimal contract for rubric / JSON-style chat completion. Provider SDKs implement this (OpenAI, Anthropic, …).
  */
@@ -31,12 +44,12 @@ export interface LlmClient {
   getModelId(): string;
 
   /** Ask for a single JSON object (providers differ; callers parse with {@link parseInterviewEvaluationJson}). */
-  completeJsonChat(params: LlmJsonChatParams): Promise<{ text: string }>;
+  completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult>;
 
   /**
    * Vision + text → single JSON object in the reply text (e.g. editor crop). Implementations without vision must throw.
    */
-  completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<{ text: string }>;
+  completeVisionJsonChat(params: LlmVisionJsonChatParams): Promise<LlmCompletionResult>;
 
   /**
    * Speech transcription from a WAV path (e.g. OpenAI Whisper). Implementations that lack audio STT must throw.

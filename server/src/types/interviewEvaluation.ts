@@ -44,6 +44,13 @@ export type MomentByMomentFeedbackItem = {
   suggestion: string;
 };
 
+/** Token usage from an LLM evaluation call. */
+export type EvaluationTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
+
 /**
  * Serializable evaluation block stored under `Result.payload.evaluation`.
  * Shape follows `prompts/interview-evaluation-system.md` (snake_case from the model → camelCase here).
@@ -63,6 +70,8 @@ export type InterviewEvaluationPayload = {
   speechCodeConflicts?: SpeechCodeConflict[];
   momentByMomentFeedback?: MomentByMomentFeedbackItem[];
   errorMessage?: string;
+  /** Token usage for the evaluation LLM call. */
+  tokenUsage?: EvaluationTokenUsage;
 };
 
 /** Input built from timed transcript segments (audio STT) and optional editor OCR (video jobs). */
