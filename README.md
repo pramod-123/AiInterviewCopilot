@@ -11,6 +11,8 @@ The **`browser-extension/`** Chrome extension starts sessions from **leetcode.co
 | `server/` | Node.js + Fastify app, Prisma (SQLite), video pipeline, live-session merge/remux, prompts |
 | `server/tst/` | Vitest unit tests |
 | `browser-extension/` | MV3 extension: popup, side panel recorder, LeetCode content script, local **Sessions** UI |
+| `demo/` | README screenshots + muted walkthrough video (repository root); not used by the server |
+| `server/media/` | Optional local files for pipeline/API tests (ignored by git except `.gitkeep`) |
 | `server/DESIGN.md` | **Detailed** server design (architecture, pipeline, Prisma, FFmpeg deep dive). |
 
 ## Prerequisites
@@ -44,6 +46,20 @@ Server listens on `http://127.0.0.1:3001` by default (`PORT` / `HOST` in `.env`)
 4. After you **End session on server**, open **Sessions** from the popup to review the merged **WebM**, **transcript**, **dimensions** analysis, and **moment-by-moment** feedback (timestamps seek the video and highlight transcript lines).
 
 Problem text is scraped from the LeetCode page (DOM + `__NEXT_DATA__`); editor code prefers **Monaco** in the page (full buffer) with DOM fallback.
+
+## Demo
+
+Toolbar **popup** (API base URL, mic hint, **Start interview** / **Sessions**):
+
+![Chrome extension popup](demo/extension-pop-up.png)
+
+**Side panel** during capture (status, compact log, Start / Stop / End session):
+
+![Chrome extension side panel recorder](demo/extension-side-panel.png)
+
+**Screen recording** — walkthrough of the analysis / sessions experience (**muted** H.264, scaled for size). If the player does not show in your viewer, open the file directly: [`interview-analysis.mp4`](demo/interview-analysis.mp4).
+
+<video src="demo/interview-analysis.mp4" controls muted playsinline preload="metadata"></video>
 
 ## HTTP API (summary)
 

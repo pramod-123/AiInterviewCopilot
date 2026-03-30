@@ -38,10 +38,6 @@ export function resolveVideoInputPath(cliArg?: string): string {
   const candidates = [
     cliArg?.trim(),
     process.env.VIDEO_PATH?.trim(),
-    path.join(cwd, "media", "Interview.mov"),
-    path.join(cwd, "media", "interview.mov"),
-    path.join(cwd, "server", "media", "Interview.mov"),
-    path.join(cwd, "server", "media", "interview.mov"),
     path.join(cwd, "interview.mov"),
     path.join(cwd, "Interview.mov"),
     path.join(cwd, "interview.mp4"),
@@ -70,7 +66,7 @@ export function resolveVideoInputPath(cliArg?: string): string {
     [
       "No video file found.",
       "Pass a path: npm run test:video-pipeline -- /path/to/interview.mov",
-      "Or set VIDEO_PATH, or place Interview.mov under server/media/ (see media/.gitkeep).",
+      "Or set VIDEO_PATH to your video file.",
     ].join(" "),
   );
 }
@@ -336,12 +332,15 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
 export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
   await assertTesseractOnPath();
   const outDir = path.resolve(argv[0] ?? "");
-  const inputVideoPath =
-    argv[1] ??
-    path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "media", "Interview.mov");
+  const inputVideoPath = (argv[1] ?? process.env.VIDEO_PATH?.trim() ?? "").trim();
 
   if (!outDir) {
-    console.error("Usage: tsx pipelineCli.ts finish-e2e <outputDir> [inputVideoPath]");
+    console.error("Usage: tsx pipelineCli.ts finish-e2e <outputDir> <inputVideoPath>");
+    process.exit(1);
+  }
+  if (!inputVideoPath) {
+    console.error("Usage: tsx pipelineCli.ts finish-e2e <outputDir> <inputVideoPath>");
+    console.error("Or set VIDEO_PATH to the source interview video.");
     process.exit(1);
   }
 

@@ -34,7 +34,7 @@ Manually smoke the extension (start interview → side panel recording → end s
 ## Tests
 
 - Unit tests live in `server/tst/` and run with Vitest (`npm test`).
-- Pipeline and API smoke tests require local tools (ffmpeg, tesseract) and credentials; see `server/package.json` scripts such as `pipeline:e2e` and `test:api:mov`.
+- Pipeline and API smoke tests require local tools (ffmpeg, tesseract) and credentials; see `server/package.json` scripts such as `pipeline:e2e` and `test:api:mov` (set **`VIDEO=/path/to/file.mov`** for the latter).
 - Live-session helpers: `npm run live-session:reset-post-process`, `npm run live-session:reprocess` (see `server/scripts/`).
 
 ## Style

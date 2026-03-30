@@ -12,6 +12,13 @@ server/data/
 server/media/*
 !server/media/.gitkeep
 
+# Local sample video for API/pipeline tests (not distributed)
+media/Interview.mov
+media/interview.mov
+
+# Full-size screen capture; repo ships compressed demo/interview-analysis.mp4 instead
+demo/interview-analysis.mov
+
 # Editor / OS
 .idea/
 .vscode/

@@ -423,7 +423,7 @@ npm run pipeline:e2e -- --quick   # short e2e smoke
 
 # Submit interview video only (returns JSON with "id")
 curl -sS -X POST http://127.0.0.1:3001/api/interviews \
-  -F "file=@./media/Interview.mov;type=video/quicktime"
+  -F "file=@/path/to/your-interview.mov;type=video/quicktime"
 # Poll result
 curl -sS http://127.0.0.1:3001/api/interviews/<id>
 ```
