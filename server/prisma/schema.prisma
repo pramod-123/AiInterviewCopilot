@@ -4,8 +4,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  /// Single connection avoids SQLite writer lock contention across a pool (see P1008 / "database is locked").
-  url      = "file:../data/app.db?connection_limit=1"
 }
 
 enum JobStatus {
