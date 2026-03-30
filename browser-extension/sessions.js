@@ -749,6 +749,8 @@ async function selectSession(sessionId, jobId, videoChunkCount, preview, updated
     detailSub.textContent = baseLine;
     detailSub.dataset.baseLine = baseLine;
   }
+  const prevMeta = document.getElementById("sessTokenMeta");
+  if (prevMeta) prevMeta.remove();
 
   void loadSessionQuestion(sessionId);
 
@@ -811,6 +813,7 @@ async function selectSession(sessionId, jobId, videoChunkCount, preview, updated
         omitInlineTranscriptionMeta: true,
       });
       moveDimensionsSection(inner);
+      renderTokenMetaUnderSession(body.result);
       return;
     }
     if (body.status === "FAILED") {
@@ -831,6 +834,115 @@ async function selectSession(sessionId, jobId, videoChunkCount, preview, updated
   } catch (e) {
     inner.replaceChildren();
     rv.renderStatusMessage(inner, e instanceof Error ? e.message : String(e), true);
+  }
+}
+
+/** Known context windows (tokens) for popular models. */
+function contextWindowForModel(model) {
+  if (typeof model !== "string") return 0;
+  const m = model.toLowerCase();
+  if (m.includes("gpt-4o-mini")) return 128000;
+  if (m.includes("gpt-4o")) return 128000;
+  if (m.includes("gpt-4-turbo")) return 128000;
+  if (m.includes("gpt-4")) return 8192;
+  if (m.includes("gpt-3.5")) return 16385;
+  if (m.includes("o1-mini")) return 128000;
+  if (m.includes("o1")) return 200000;
+  if (m.includes("o3-mini")) return 200000;
+  if (m.includes("o3")) return 200000;
+  if (m.includes("claude-3-5-sonnet")) return 200000;
+  if (m.includes("claude-3-5-haiku")) return 200000;
+  if (m.includes("claude-3-opus")) return 200000;
+  if (m.includes("claude-3-sonnet")) return 200000;
+  if (m.includes("claude-3-haiku")) return 200000;
+  if (m.includes("claude")) return 200000;
+  return 0;
+}
+
+/**
+ * Render faint token-usage metadata below the session subtitle (detailSub).
+ * @param {Record<string, unknown>} payload — Result.payload from the API
+ */
+function renderTokenMetaUnderSession(payload) {
+  const existing = document.getElementById("sessTokenMeta");
+  if (existing) existing.remove();
+
+  if (!payload || typeof payload !== "object") return;
+
+  const evaluation =
+    payload.evaluation && typeof payload.evaluation === "object"
+      ? /** @type {Record<string, unknown>} */ (payload.evaluation)
+      : null;
+  const pipelineObj =
+    payload.pipeline && typeof payload.pipeline === "object"
+      ? /** @type {Record<string, unknown>} */ (payload.pipeline)
+      : null;
+
+  const evalUsage =
+    evaluation && evaluation.tokenUsage && typeof evaluation.tokenUsage === "object"
+      ? /** @type {Record<string, unknown>} */ (evaluation.tokenUsage)
+      : null;
+  const roiUsage =
+    pipelineObj && pipelineObj.roiTokenUsage && typeof pipelineObj.roiTokenUsage === "object"
+      ? /** @type {Record<string, unknown>} */ (pipelineObj.roiTokenUsage)
+      : null;
+
+  if (!evalUsage && !roiUsage) return;
+
+  /** @param {Record<string, unknown>} u @param {string} k */
+  function n(u, k) {
+    const v = u[k];
+    return typeof v === "number" && Number.isFinite(v) ? v : 0;
+  }
+
+  /** @param {string} label @param {Record<string, unknown>} usage @param {string|null} model */
+  function line(label, usage, model) {
+    const inp = n(usage, "inputTokens");
+    const out = n(usage, "outputTokens");
+    const total = n(usage, "totalTokens") || inp + out;
+    let s = `${label}  ·  in ${inp.toLocaleString()}  ·  out ${out.toLocaleString()}  ·  total ${total.toLocaleString()}`;
+    const cached = n(usage, "cachedTokens");
+    if (cached > 0) s += `  (${cached.toLocaleString()} cached)`;
+    const reasoning = n(usage, "reasoningTokens");
+    if (reasoning > 0) s += `  (${reasoning.toLocaleString()} reasoning)`;
+    const ctx = contextWindowForModel(model);
+    if (ctx > 0 && total > 0) {
+      const pct = ((total / ctx) * 100).toFixed(1);
+      s += `  ·  ${pct}% of ${(ctx / 1000).toLocaleString()}k context`;
+    }
+    return s;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.id = "sessTokenMeta";
+  wrap.className = "ic-token-meta";
+
+  if (evalUsage) {
+    const model = evaluation && typeof evaluation.model === "string" ? evaluation.model : null;
+    const provider = evaluation && typeof evaluation.provider === "string" ? evaluation.provider : "";
+    const label = model ? `${provider}/${model}` : "Evaluation";
+    const span = document.createElement("span");
+    span.className = "ic-token-meta-line";
+    span.textContent = line(label, evalUsage, model);
+    wrap.appendChild(span);
+  }
+  if (roiUsage) {
+    const span = document.createElement("span");
+    span.className = "ic-token-meta-line";
+    span.textContent = line("vision roi", roiUsage, null);
+    wrap.appendChild(span);
+  }
+  if (evalUsage && roiUsage) {
+    const totalIn = n(evalUsage, "inputTokens") + n(roiUsage, "inputTokens");
+    const totalOut = n(evalUsage, "outputTokens") + n(roiUsage, "outputTokens");
+    const span = document.createElement("span");
+    span.className = "ic-token-meta-line";
+    span.textContent = `combined  ·  in ${totalIn.toLocaleString()}  ·  out ${totalOut.toLocaleString()}  ·  total ${(totalIn + totalOut).toLocaleString()}`;
+    wrap.appendChild(span);
+  }
+
+  if (detailSub) {
+    detailSub.after(wrap);
   }
 }
 
