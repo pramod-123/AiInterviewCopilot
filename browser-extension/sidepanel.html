@@ -1,0 +1,141 @@
+<!doctype html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interview Copilot — Recording</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div class="sp-float-shell">
+      <header class="sp-header">
+        <div class="sp-brand">Interview Copilot</div>
+        <div class="sp-header-actions">
+          <button
+            type="button"
+            class="sp-icon-btn"
+            id="btnSideSettings"
+            title="Settings"
+            aria-expanded="false"
+            aria-controls="sideSettingsPanel"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+          </button>
+          <button
+            type="button"
+            class="sp-icon-btn"
+            id="btnSideHelp"
+            title="Help"
+            aria-expanded="false"
+            aria-controls="sideHelpPanel"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">help</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="sp-main">
+        <div class="sp-scroll-body">
+          <div class="sp-session-stack">
+            <p id="meta" class="sp-meta-line"></p>
+
+            <div class="session-hero">
+              <div class="session-pill" id="sessionStatePill">
+                <div class="ping-wrap">
+                  <span class="ping" aria-hidden="true"></span>
+                  <span class="dot" aria-hidden="true"></span>
+                </div>
+                <span id="sessionStateLabel">Standby</span>
+              </div>
+              <h1 id="sessionClock">00:00</h1>
+            </div>
+
+            <div id="sideSettingsPanel" class="sp-panel-toggle hidden" role="region" aria-label="Settings">
+              <label class="mic-setting">
+                <input type="checkbox" id="chkMic" checked />
+                <span
+                  ><strong>Record microphone</strong> — Your mic with tab video. Sound playing in the tab (e.g. Meet) is
+                  not mixed into the file in this version. Uncheck for tab-only audio.</span
+                >
+              </label>
+            </div>
+
+            <div id="sideHelpPanel" class="sp-panel-toggle hidden" role="region" aria-label="Help">
+              <p>
+                Open the toolbar popup → <strong>Start interview</strong> on a LeetCode problem tab. That opens this panel
+                with a live session. If the mic prompt fails here, allow the microphone from the popup first or in
+                <code>chrome://settings/content/microphone</code> for this extension.
+              </p>
+            </div>
+
+            <div class="sp-card sp-card-compact">
+              <div class="sp-card-head sp-card-head-tight">
+                <span class="sp-card-title">Capture</span>
+                <span class="sp-card-meta">~10s chunks</span>
+              </div>
+              <div class="capture-rows">
+                <div class="capture-row">
+                  <div class="capture-row-left">
+                    <div class="capture-icon">
+                      <span class="material-symbols-outlined" aria-hidden="true">tab</span>
+                    </div>
+                    <span class="capture-label">Tab</span>
+                  </div>
+                  <span class="capture-status idle" id="tabCaptureStatus">Idle</span>
+                </div>
+                <div class="capture-row">
+                  <div class="capture-row-left">
+                    <div class="capture-icon">
+                      <span class="material-symbols-outlined" aria-hidden="true">mic</span>
+                    </div>
+                    <span class="capture-label">Audio</span>
+                  </div>
+                  <span class="capture-status idle" id="micCaptureStatus">Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sp-log-panel" aria-label="Activity log">
+          <div class="sp-log-panel-head">
+            <div class="sp-log-panel-title">
+              <div class="analysis-icon">
+                <span class="material-symbols-outlined" aria-hidden="true">terminal</span>
+              </div>
+              <span class="sp-log-title">Log</span>
+            </div>
+            <div class="analysis-pulse" id="analysisPulse" aria-hidden="true"></div>
+          </div>
+          <div class="log-scroll" id="logScroll">
+            <div id="logEntries"></div>
+          </div>
+        </div>
+
+        <div class="sp-feedback-stack">
+          <p id="processStatus" hidden></p>
+          <section id="resultSection" hidden aria-live="polite"></section>
+        </div>
+
+        <footer class="sp-actions">
+          <button type="button" id="btnStart">Start recording LeetCode tab</button>
+          <button type="button" id="btnStop" disabled>Stop capture</button>
+          <button type="button" id="btnEnd" disabled>End session on server</button>
+        </footer>
+      </main>
+    </div>
+
+    <script src="resultView.js"></script>
+    <script src="recorder.js"></script>
+  </body>
+</html>

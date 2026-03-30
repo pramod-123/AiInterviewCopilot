@@ -1,0 +1,166 @@
+<!doctype html>
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Interview Copilot — Session results</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
+    <link rel="stylesheet" href="sessions.css" />
+  </head>
+  <body>
+    <header class="sess-header">
+      <div class="sess-header-inner">
+        <div class="sess-brand">
+          <div class="sess-logo" aria-hidden="true">A</div>
+          <h1 class="sess-brand-title">Interview <span class="accent">Copilot</span></h1>
+        </div>
+        <nav class="sess-nav" aria-label="Primary">
+          <span class="sess-nav-placeholder">Dashboard</span>
+          <span class="is-active">Sessions</span>
+          <span class="sess-nav-placeholder">Performance</span>
+        </nav>
+        <div class="sess-header-tools" aria-hidden="true"></div>
+      </div>
+    </header>
+
+    <div class="sess-toolbar">
+      <label>
+        API base URL
+        <input id="apiBase" type="url" placeholder="http://127.0.0.1:3001" autocomplete="off" />
+      </label>
+      <button type="button" class="sess-btn sess-btn-primary" id="btnLoad">Load sessions</button>
+      <button type="button" class="sess-btn sess-btn-ghost" id="btnOpenPopup">New interview</button>
+    </div>
+    <p id="listStatus"></p>
+
+    <div class="sess-shell">
+      <aside class="sess-sidebar" aria-label="Recent sessions">
+        <div class="sess-sidebar-head">
+          <h3>Recent sessions</h3>
+          <span id="sessionCountBadge">—</span>
+        </div>
+        <div class="sess-sidebar-list custom-scrollbar" id="sessionList"></div>
+      </aside>
+
+      <main class="sess-main custom-scrollbar">
+        <div class="sess-main-inner">
+          <div id="detailEmpty" class="sess-empty-detail">
+            Select a session from the list to play the merged recording and view interview feedback when a
+            post-process job exists.
+          </div>
+
+          <div id="detailWorkspace" class="hidden">
+            <div class="sess-detail-top">
+              <div>
+                <div class="sess-breadcrumb">
+                  <span>Sessions</span>
+                  <span class="material-icons-round" aria-hidden="true">chevron_right</span>
+                  <span class="mono" id="breadcrumbSessionId">—</span>
+                </div>
+                <h2 id="detailTitle">—</h2>
+                <details class="sess-question-details" id="sessQuestionDetails" hidden>
+                  <summary class="sess-question-summary">
+                    <span class="material-icons-round sess-question-chevron" aria-hidden="true">expand_more</span>
+                    <span class="sess-question-summary-label">Interview problem / prompt</span>
+                  </summary>
+                  <div class="sess-question-panel custom-scrollbar">
+                    <pre id="detailQuestionBody" class="sess-question-pre"></pre>
+                  </div>
+                </details>
+                <p id="detailSub">—</p>
+              </div>
+              <div class="sess-detail-actions">
+                <button type="button" class="sess-action-btn" id="btnShare" title="Copy recording URL">
+                  <span class="material-icons-round" aria-hidden="true">share</span>
+                  Share report
+                </button>
+                <button type="button" class="sess-action-btn sess-action-btn-primary" id="btnExportPrint">
+                  <span class="material-icons-round" aria-hidden="true">download</span>
+                  Print / Save PDF
+                </button>
+              </div>
+            </div>
+
+            <div class="sess-grid">
+              <div class="sess-col-left">
+                <div id="sess-video-card" class="sess-video-card">
+                  <video id="sessionVideo" controls playsinline preload="metadata"></video>
+                  <p class="video-status" id="videoStatus" hidden></p>
+                </div>
+                <div id="sess-transcript-card" class="sess-transcript-card">
+                  <div class="sess-transcript-head">
+                    <h3>
+                      <span class="material-icons-round" aria-hidden="true">notes</span>
+                      Transcription
+                    </h3>
+                    <span id="transcriptBadge">—</span>
+                  </div>
+                  <div id="transcriptLines"></div>
+                </div>
+                <div id="sess-moment-card" class="sess-moment-card hidden" aria-live="polite">
+                  <div class="sess-moment-head">
+                    <h3>
+                      <span class="material-icons-round" aria-hidden="true">schedule</span>
+                      Moment-by-moment feedback
+                    </h3>
+                  </div>
+                  <div id="momentByMomentLines" class="sess-moment-body custom-scrollbar"></div>
+                </div>
+              </div>
+              <div class="sess-col-right">
+                <div class="kinetic-border sess-feedback-shell">
+                  <div id="detailPanel">
+                    <p class="detail-muted">Loading…</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="sessDimensionsMount" class="sess-dimensions-wrap hidden">
+              <div class="sess-dimensions-title">
+                <span class="material-icons-round" aria-hidden="true">assessment</span>
+                Dimensions analysis
+              </div>
+              <div id="sessDimensionsBody"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <footer class="sess-footer">
+      <div class="sess-footer-inner">
+        <div class="sess-footer-nav" role="navigation" aria-label="Section jump">
+          <button type="button" id="footJumpVideo" class="is-active">
+            <span class="material-icons-round" aria-hidden="true">grid_view</span>
+            <span class="lbl">Overview</span>
+          </button>
+          <button type="button" id="footJumpTranscript">
+            <span class="material-icons-round" aria-hidden="true">terminal</span>
+            <span class="lbl">Transcript</span>
+          </button>
+          <button type="button" id="footJumpDims">
+            <span class="material-icons-round" aria-hidden="true">psychology</span>
+            <span class="lbl">Dimensions</span>
+          </button>
+        </div>
+        <div class="sess-footer-pill">
+          <span>Synced with server</span>
+          <span class="dot" aria-hidden="true"></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span id="footerSessionId">—</span>
+        </div>
+      </div>
+    </footer>
+
+    <script src="resultView.js"></script>
+    <script src="sessions.js"></script>
+  </body>
+</html>

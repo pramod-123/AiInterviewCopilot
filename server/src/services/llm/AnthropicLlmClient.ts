@@ -44,7 +44,7 @@ export class AnthropicLlmClient implements LlmClient {
       },
       body: JSON.stringify({
         model: this.modelId,
-        max_tokens: 4096,
+        max_tokens: params.maxOutputTokens ?? 8192,
         system,
         messages: [{ role: "user", content: params.user }],
         temperature: params.temperature ?? 0.4,

@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from "fastify";
 import { PromptLoader } from "../../prompts/PromptLoader.js";
 import type {
   InterviewEvaluationInput,
@@ -42,10 +43,12 @@ class SkippedInterviewEvaluationService implements InterviewEvaluator {
 export class InterviewEvaluationServiceFactory {
   constructor(private readonly env: NodeJS.ProcessEnv = process.env) {}
 
-  create(): InterviewEvaluator {
+  create(promptLog?: FastifyBaseLogger): InterviewEvaluator {
     const loader = new PromptLoader();
-    const systemPrompt = loader.loadSync(SYSTEM_PROMPT_FILE);
-    const userPromptTemplate = loader.loadSync(USER_PROMPT_FILE);
+    const loadPrompts = () => ({
+      systemPrompt: loader.loadSync(SYSTEM_PROMPT_FILE),
+      userPromptTemplate: loader.loadSync(USER_PROMPT_FILE),
+    });
 
     const raw = this.env.EVALUATION_PROVIDER?.toLowerCase().trim() ?? "openai";
 
@@ -66,8 +69,8 @@ export class InterviewEvaluationServiceFactory {
       }
       return new InterviewEvaluationService(llm, {
         provider: llm.getProviderId(),
-        systemPrompt,
-        userPromptTemplate,
+        loadPrompts,
+        promptLog,
       });
     }
 
@@ -81,8 +84,8 @@ export class InterviewEvaluationServiceFactory {
       }
       return new InterviewEvaluationService(llm, {
         provider: llm.getProviderId(),
-        systemPrompt,
-        userPromptTemplate,
+        loadPrompts,
+        promptLog,
       });
     }
 

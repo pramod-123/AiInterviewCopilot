@@ -4,6 +4,7 @@ import type { InterviewEvaluator } from "./evaluation/InterviewEvaluationService
 import { transcriptionToEvaluationInput } from "./evaluation/transcriptionToEvaluationInput.js";
 import type { ISpeechToTextService } from "./speech-to-text/ISpeechToTextService.js";
 import {
+  applyCarryForwardEditorSnapshots,
   buildFinalTranscriptJson,
   finalTranscriptToEvaluationTimeline,
   stringifyInterviewTimelineForEvaluation,
@@ -14,6 +15,11 @@ export type TranscribeAndEvaluateOptions = {
   /** Frame timestamps (seconds) on the cropped video timeline; paired with `evaluationFrameOcrTexts`. */
   evaluationFrameTimesSec?: number[];
   evaluationFrameOcrTexts?: string[];
+  /**
+   * Live sessions: sparse code snapshots — fill speech slices that missed a snapshot with the previous code.
+   * @see applyCarryForwardEditorSnapshots
+   */
+  carryForwardEditorSnapshots?: boolean;
 };
 
 /**
@@ -38,7 +44,10 @@ export class SpeechTranscriptionEvaluationOrchestrator {
     const evalInput = transcriptionToEvaluationInput(jobId, transcription);
     const times = options?.evaluationFrameTimesSec ?? [];
     const ocrs = options?.evaluationFrameOcrTexts ?? [];
-    const finalTranscript = buildFinalTranscriptJson(transcription, times, ocrs);
+    let finalTranscript = buildFinalTranscriptJson(transcription, times, ocrs);
+    if (options?.carryForwardEditorSnapshots) {
+      finalTranscript = applyCarryForwardEditorSnapshots(finalTranscript);
+    }
     const timelineSegs = finalTranscriptToEvaluationTimeline(finalTranscript);
     const maxRaw = process.env.INTERVIEW_EVAL_TIMELINE_MAX_CHARS?.trim();
     let maxChars = maxRaw ? Number(maxRaw) : 180_000;

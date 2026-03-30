@@ -3,12 +3,14 @@ import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "./db.js";
 import { JobRoutesController } from "./http/JobRoutesController.js";
+import { LiveSessionRoutesController } from "./http/LiveSessionRoutesController.js";
 import { AppPaths } from "./infrastructure/AppPaths.js";
 import { assertMandatoryInterviewApiConfig } from "./services/mandatoryInterviewApiEnv.js";
 import { InterviewEvaluationServiceFactory } from "./services/evaluation/InterviewEvaluationServiceFactory.js";
 import { LlmClientFactory } from "./services/llm/LlmClientFactory.js";
 import { SpeechTranscriptionEvaluationOrchestratorFactory } from "./services/SpeechTranscriptionEvaluationOrchestratorFactory.js";
 import { SpeechToTextServiceFactory } from "./services/speech-to-text/SpeechToTextServiceFactory.js";
+import { LiveSessionPostProcessor } from "./services/LiveSessionPostProcessor.js";
 import { VideoJobProcessor } from "./services/VideoJobProcessor.js";
 import { EditorRoiDetectionService } from "./video-pipeline/editorRoiDetection.js";
 
@@ -46,6 +48,7 @@ export class InterviewCopilotServer {
     const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory(
       this.speechToTextFactory,
       this.evaluationFactory,
+      this.app.log,
     ).tryCreate();
     const visionOpenAiLlm = LlmClientFactory.tryCreate("openai", process.env);
     // ffmpeg/ffprobe/tesseract, STT + eval, vision ROI — fail before accepting uploads.
@@ -58,6 +61,19 @@ export class InterviewCopilotServer {
       this.app.log,
       roiDetection,
     );
+    const liveSessionPostProcessor = new LiveSessionPostProcessor(
+      prisma,
+      this.paths,
+      speechAnalysis,
+      this.app.log,
+    );
+    const liveSessionRoutes = new LiveSessionRoutesController(
+      prisma,
+      this.paths,
+      liveSessionPostProcessor,
+    );
+    liveSessionRoutes.register(this.app);
+
     const jobRoutes = new JobRoutesController(prisma, this.paths, videoProcessor);
     jobRoutes.register(this.app);
   }

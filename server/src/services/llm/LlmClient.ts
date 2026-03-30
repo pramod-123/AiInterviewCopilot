@@ -7,6 +7,8 @@ export type LlmJsonChatParams = {
   system: string;
   user: string;
   temperature?: number;
+  /** Cap on completion tokens (evaluation JSON can be long). */
+  maxOutputTokens?: number;
 };
 
 /** Multimodal JSON-style completion (e.g. editor ROI from a PNG). */

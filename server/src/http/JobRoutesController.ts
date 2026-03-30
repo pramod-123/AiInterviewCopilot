@@ -123,6 +123,7 @@ export class JobRoutesController {
         result: true,
         interviewVideo: true,
         transcriptSegments: { orderBy: TranscriptPresenter.defaultOrderBy },
+        liveSession: { select: { id: true } },
       },
     });
 
@@ -133,11 +134,14 @@ export class JobRoutesController {
     const transcripts = TranscriptPresenter.toDtoList(job.transcriptSegments);
 
     if (!job.result) {
+      const fromLiveSession = job.liveSession != null;
       const message =
         job.status === "FAILED"
           ? job.errorMessage ?? "Processing failed."
           : job.status === "PROCESSING"
-            ? "Processing interview video (vision ROI, frames, OCR, speech, evaluation)…"
+            ? fromLiveSession
+              ? "Processing live session (merged recording, speech-to-text, code-snapshot timeline, evaluation)…"
+              : "Processing interview video (vision ROI, frames, OCR, speech, evaluation)…"
             : "Result not ready yet.";
 
       return void reply.code(202).send({
@@ -145,6 +149,7 @@ export class JobRoutesController {
         status: job.status,
         message,
         errorMessage: job.errorMessage,
+        liveSessionId: job.liveSessionId,
         transcripts,
       });
     }
@@ -154,6 +159,7 @@ export class JobRoutesController {
       status: job.status,
       result: job.result.payload,
       createdAt: job.result.createdAt.toISOString(),
+      liveSessionId: job.liveSessionId,
       transcripts,
     });
   }

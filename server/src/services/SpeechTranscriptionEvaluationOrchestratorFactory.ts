@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from "fastify";
 import { InterviewEvaluationServiceFactory } from "./evaluation/InterviewEvaluationServiceFactory.js";
 import { SpeechToTextServiceFactory } from "./speech-to-text/SpeechToTextServiceFactory.js";
 import { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscriptionEvaluationOrchestrator.js";
@@ -9,6 +10,7 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
   constructor(
     private readonly speechToTextFactory: SpeechToTextServiceFactory = new SpeechToTextServiceFactory(),
     private readonly evaluationFactory: InterviewEvaluationServiceFactory = new InterviewEvaluationServiceFactory(),
+    private readonly evaluationPromptLog?: FastifyBaseLogger,
   ) {}
 
   tryCreate(): SpeechTranscriptionEvaluationOrchestrator | null {
@@ -16,7 +18,10 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
     if (!stt) {
       return null;
     }
-    return new SpeechTranscriptionEvaluationOrchestrator(stt, this.evaluationFactory.create());
+    return new SpeechTranscriptionEvaluationOrchestrator(
+      stt,
+      this.evaluationFactory.create(this.evaluationPromptLog),
+    );
   }
 
   /**
@@ -29,6 +34,9 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
         "Speech-to-text is not configured. Use STT_PROVIDER=remote (default) with OPENAI_API_KEY for Whisper via LlmClient, STT_PROVIDER=local with the whisper CLI, or fix your env.",
       );
     }
-    return new SpeechTranscriptionEvaluationOrchestrator(stt, this.evaluationFactory.create());
+    return new SpeechTranscriptionEvaluationOrchestrator(
+      stt,
+      this.evaluationFactory.create(this.evaluationPromptLog),
+    );
   }
 }

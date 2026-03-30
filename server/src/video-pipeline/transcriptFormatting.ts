@@ -261,6 +261,29 @@ export function buildFinalTranscriptJson(
   return out;
 }
 
+/**
+ * Live sessions upload code snapshots only when the editor changes (plus a 10s cap), so many speech
+ * intervals have no in-range snapshot. Copy the **last known code** into any **speech** segment whose
+ * `frameData` is still empty so evaluation always sees progressive code context.
+ *
+ * Does not mutate the input (returns new segment objects with copied `frameData` arrays).
+ * Synthetic carry-forward rows use `frameNumber: 0`.
+ */
+export function applyCarryForwardEditorSnapshots(final: FinalTranscriptJson): FinalTranscriptJson {
+  let lastCode = "";
+  return final.map((seg) => {
+    const frameData = [...seg.frameData];
+    const isSpeech = seg.audioTranscript.trim().length > 0;
+    if (isSpeech && frameData.length === 0 && lastCode !== "") {
+      frameData.push({ frameNumber: 0, text: lastCode });
+    }
+    if (frameData.length > 0) {
+      lastCode = frameData[frameData.length - 1]!.text;
+    }
+    return { ...seg, frameData };
+  });
+}
+
 // --- Evaluation LLM timeline (aligned speech + progressive frame OCR) ------------
 
 export type InterviewEvaluationTimelineSegment = {

@@ -1,13 +1,16 @@
 # Ai Interview Copilot
 
-Backend service that ingests **interview screen recordings**, extracts an **editor ROI** (vision), runs **frame OCR** (Tesseract) and **speech-to-text** (Whisper), then produces a structured **rubric evaluation** (LLM). Exposes a small **HTTP API** for uploading video jobs and polling results.
+Backend service that ingests **interview screen recordings**, extracts an **editor ROI** (vision), runs **frame OCR** (Tesseract) and **speech-to-text** (Whisper), then produces a structured **rubric evaluation** (LLM). Exposes an **HTTP API** for classic **video upload** jobs, plus **live LeetCode sessions** (tab capture + code snapshots) that merge into a single recording and spawn the same post-process pipeline.
+
+The **`browser-extension/`** Chrome extension starts sessions from **leetcode.com** problems, records via the **side panel** (mic + tab), uploads chunks to the server, and opens a **sessions** report page (video, transcript, dimensions, moment-by-moment feedback).
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| `server/` | Node.js + Fastify app, Prisma (SQLite), video pipeline, prompts |
+| `server/` | Node.js + Fastify app, Prisma (SQLite), video pipeline, live-session merge/remux, prompts |
 | `server/tst/` | Vitest unit tests |
+| `browser-extension/` | MV3 extension: popup, side panel recorder, LeetCode content script, local **Sessions** UI |
 | `server/DESIGN.md` | Pointer; full spec is **[Server design](#server-design)** below. |
 
 ## Prerequisites
@@ -33,10 +36,32 @@ npm run dev
 
 Server listens on `http://127.0.0.1:3001` by default (`PORT` / `HOST` in `.env`).
 
-## HTTP API
+## Browser extension (LeetCode live capture)
+
+1. Start the server (`npm run dev` in `server/`).
+2. Chrome → **Extensions** → **Developer mode** → **Load unpacked** → select the repo’s **`browser-extension/`** folder.
+3. Open a **`https://leetcode.com/problems/...`** tab, click the extension icon, set **API base URL** if needed (default `http://127.0.0.1:3001`), then **Start interview** (opens the **side panel** for tab capture + microphone).
+4. After you **End session on server**, open **Sessions** from the popup to review the merged **WebM**, **transcript**, **dimensions** analysis, and **moment-by-moment** feedback (timestamps seek the video and highlight transcript lines).
+
+Problem text is scraped from the LeetCode page (DOM + `__NEXT_DATA__`); editor code prefers **Monaco** in the page (full buffer) with DOM fallback.
+
+## HTTP API (summary)
+
+**Classic video jobs**
 
 - **`POST /api/interviews`** — multipart field `file`: interview **video** (e.g. `.mov`, `.mp4`)
 - **`GET /api/interviews/:id`** — job status; when complete, includes `result` (STT summary, evaluation payload, pipeline metadata) and `transcripts`
+
+**Live sessions (extension)**
+
+- **`POST /api/live-sessions`** — create session; returns `id`
+- **`PATCH /api/live-sessions/:id`** — JSON `{ "question": "..." }` (problem statement while `ACTIVE`)
+- **`POST /api/live-sessions/:id/video-chunk`** — multipart field **`chunk`** (WebM slice from `MediaRecorder`)
+- **`POST /api/live-sessions/:id/code-snapshot`** — JSON `{ "code", "offsetSeconds" }`
+- **`POST /api/live-sessions/:id/end`** — mark **ENDED**, merge/remux chunks to **`recording.webm`**, enqueue **`LiveSessionPostProcessor`** → new **`Job`** linked via `liveSessionId`
+- **`GET /api/live-sessions`** — list recent sessions (counts, question preview, post-process job status)
+- **`GET /api/live-sessions/:id`** — session metadata, `question`, `recordingWebmPath`, `postProcessJob`
+- **`GET /api/live-sessions/:id/recording.webm`** — merged **WebM** (supports **Range** for `<video>`)
 
 ## Scripts (from `server/`)
 
@@ -49,6 +74,8 @@ Server listens on `http://127.0.0.1:3001` by default (`PORT` / `HOST` in `.env`)
 | `npm run test:coverage` | Tests + coverage report in `coverage/` |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript `--noEmit` |
+| `npm run live-session:reset-post-process` | Dev helper: clear post-process link / job for a session id |
+| `npm run live-session:reprocess` | Dev helper: re-run live-session → interview job pipeline |
 
 ## Configuration
 
@@ -75,7 +102,8 @@ This document describes the **Node/TypeScript HTTP server** under `server/`: res
 #### 1. Goals
 
 - **HTTP interviews are video-only** (`POST /api/interviews`): every job runs the **full** pipeline — **vision ROI**, **frame extract + Tesseract OCR**, **demuxed-audio Whisper STT**, and **rubric evaluation**. There is **no** audio-only shortcut.
-- **Single HTTP poll** (`GET /api/interviews/:id`) for status, transcripts, and final **`result`** JSON.
+- **Live LeetCode sessions** (`/api/live-sessions/…`) feed a **merged tab recording** (+ optional mic) and **code snapshots** into the **same** pipeline after **`POST …/end`**.
+- **Single HTTP poll** (`GET /api/interviews/:id`) for status, transcripts, and final **`result`** JSON (including jobs created from ended live sessions).
 - **Server startup** fails fast unless **ffmpeg**, **ffprobe**, **tesseract**, **STT**, and **vision ROI** are all available (`assertMandatoryInterviewApiConfig` in `mandatoryInterviewApiEnv.ts`).
 - Share **STT + evaluation** and **`E2eInterviewPipeline`** with **CLI** (`pipelineCli e2e`). The **`AudioJobProcessor`** class remains in the codebase for non-HTTP use only; the public API does not call it.
 
@@ -95,7 +123,7 @@ This document describes the **Node/TypeScript HTTP server** under `server/`: res
 
 #### 3. Architecture
 
-The repo exposes **two HTTP routes** for clients (**submit** + **result**), plus **CLI** (`pipelineCli`). All STT + rubric paths use **`SpeechTranscriptionEvaluationOrchestrator`**; HTTP persists to **Prisma** (`Job.id` is returned to clients as **`id`**).
+The repo exposes **classic interview job** routes (**submit** + **result**), **live-session** routes for the Chrome extension, plus **CLI** (`pipelineCli`). STT + rubric paths use **`SpeechTranscriptionEvaluationOrchestrator`**; HTTP persists to **Prisma** (`Job.id` is returned to clients as **`id`**).
 
 ##### 3.1 HTTP (public API)
 
@@ -113,6 +141,25 @@ The repo exposes **two HTTP routes** for clients (**submit** + **result**), plus
 - **`GET /api/interviews/:id`**: **`202`** until `Result` exists; **`200`** with `result` + `transcripts`.
 
 Artifacts: **`data/uploads/<id>/pipeline/`**. Same **`E2eInterviewPipeline`** as CLI e2e (LLM ROI is **not** optional for HTTP).
+
+##### 3.1a Live sessions (`LiveSessionRoutesController`)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              LiveSessionRoutesController                         │
+│  POST/GET /api/live-sessions  ·  PATCH /:id  ·  POST …/end      │
+│  POST …/video-chunk  ·  POST …/code-snapshot                     │
+│  GET …/recording.webm (merged WebM, Range-capable)               │
+└─────┬───────────────────────────────────────────────────────────┘
+      │
+      ├── chunks on disk: data/live-sessions/<sessionId>/video-chunks/
+      ├── end → mergeLiveSessionRecording / remux → recording.webm
+      └── LiveSessionPostProcessor → VideoJobProcessor / E2eInterviewPipeline → Job + Result
+```
+
+- **While `ACTIVE`**, the extension streams **WebM** time slices and periodic **Monaco** code snapshots; **`PATCH`** stores the **LeetCode problem statement** (scraped in the page).
+- **`POST …/end`** flips status to **`ENDED`**, writes a **playable** merged **WebM** (ffmpeg remux; chunks alone are not standalone files), creates a **`Job`** with **`liveSessionId`**, and runs the **same** ROI + OCR + STT + evaluation path as **`POST /api/interviews`**, using the merged file as **`InterviewVideo`**.
+- Session-facing artifacts and **`interview-feedback.json`** also live under **`data/live-sessions/<id>/`** for the extension UI.
 
 ##### 3.2 CLI / video pipeline path (FFmpeg, ROI, OCR)
 
@@ -208,17 +255,21 @@ Implementation: **`ffmpegExtract.ts`** (`FfmpegRunner`, `ffprobeFormatDurationSe
 | FFmpeg / ffprobe | Yes (mandatory at startup) | Yes |
 | Tesseract | Yes (mandatory at startup) | Yes (e2e / finish-e2e) |
 | Vision ROI | Yes (mandatory at startup) | e2e only |
-| STT + evaluation | `VideoJobProcessor` only | Same orchestrator |
+| STT + evaluation | `VideoJobProcessor` + **`LiveSessionPostProcessor`** | Same orchestrator |
 | `VIDEO_OCR` + `AUDIO_STT` in DB | Both from pipeline | Files only |
+| Live sessions | **`LiveSessionRoutesController`** + `data/live-sessions/` | No |
 | SQLite | Yes | No |
 
 ---
 
 #### 4. Data Model (Prisma)
 
-- **`Job`** — lifecycle: `PENDING` → `PROCESSING` → `COMPLETED` | `FAILED`; optional `errorMessage`.
+- **`Job`** — lifecycle: `PENDING` → `PROCESSING` → `COMPLETED` | `FAILED`; optional `errorMessage`; optional **`liveSessionId`** when spawned from **`LiveSessionPostProcessor`**.
+- **`InterviewLiveSession`** — browser live capture: `ACTIVE` | `ENDED`, optional **`question`** (problem text), timestamps.
+- **`LiveVideoChunk`** — ordered **WebM** slice files per session (`sequence`, `filePath`, mime/size metadata).
+- **`LiveCodeSnapshot`** — editor text + **`offsetSeconds`** on the session timeline for correlation with the merged recording.
 - **`InterviewAudio`** — for **HTTP** jobs, **always** created/updated after the pipeline with path to **`pipeline/audio.wav`** (demuxed speech track). Not used for a standalone upload on the public API.
-- **`InterviewVideo`** — one-to-one for **HTTP** jobs: the uploaded **source** video path.
+- **`InterviewVideo`** — one-to-one for **HTTP** jobs: the uploaded **source** video path (for live sessions, the **merged** `recording.webm` path under **`data/live-sessions/...`**).
 - **`TranscriptSegment`** — many per job; `source` is `AUDIO_STT` or `VIDEO_OCR`; times are **milliseconds** on a single session timeline; ordered by `(source, sequence, startMs)` for API responses.
 - **`Result`** — one JSON `payload` per job: **`stt`** metadata + **`evaluation`**; video jobs add **`pipeline`** (`kind: "video"`, crop, counts, **`finalTranscript`**, **`alignedTimeline`**).
 
@@ -227,6 +278,10 @@ SQLite file: `server/data/app.db` (URL in `prisma/schema.prisma`: `file:../data/
 ---
 
 #### 5. HTTP API (client surface)
+
+##### Live sessions (extension)
+
+See **[HTTP API (summary)](#http-api-summary)** above for the route list. Typical flow: **`POST /api/live-sessions`** → **`PATCH`** question → **`POST …/video-chunk`** (repeat) + **`POST …/code-snapshot`** (periodic) → **`POST …/end`** → poll **`GET /api/interviews/:jobId`** using **`postProcessJob.id`** from **`GET /api/live-sessions/:id`**.
 
 ##### `POST /api/interviews`
 
@@ -250,7 +305,7 @@ SQLite file: `server/data/app.db` (URL in `prisma/schema.prisma`: `file:../data/
 
 - **`transcribeAndEvaluate(audioPath, jobId)`** → `{ transcription, evaluation }`.
 - STT via **`ISpeechToTextService`** (OpenAI Whisper with chunked WAV for large files + retries on transient errors).
-- Evaluation via **`InterviewEvaluationService`**, which calls an injected **`LlmClient`** (`OpenAiLlmClient`, `AnthropicLlmClient`, …); prompts under `prompts/`.
+- Evaluation via **`InterviewEvaluationService`**, which calls an injected **`LlmClient`** (`OpenAiLlmClient`, `AnthropicLlmClient`, …); prompts under `prompts/`. The JSON rubric includes **dimensions** (with rationale points and optional timestamped evidence), **moment-by-moment** feedback, and related fields typed in **`interviewEvaluation.ts`** / parsed by **`interviewEvaluationJson.ts`**.
 - Evaluation failures are **captured** in payload (`status: "failed"`) rather than throwing, matching job completion semantics.
 
 ##### `SpeechTranscriptionEvaluationOrchestratorFactory`
@@ -282,7 +337,7 @@ SQLite file: `server/data/app.db` (URL in `prisma/schema.prisma`: `file:../data/
 
 #### 7. Infrastructure
 
-- **`AppPaths`** — resolves `server/data`, `server/data/uploads`, per-job upload dirs.
+- **`AppPaths`** — resolves `server/data`, `server/data/uploads`, per-job upload dirs, and **`data/live-sessions/<sessionId>/`** (chunks, merged **`recording.webm`**, post-process artifacts).
 - **`db.ts`** — singleton `PrismaClient`; **`index.ts`** calls **`prisma.$connect()`** before listening.
 - **Entry:** `src/index.ts` — `PORT` / `HOST` from env (defaults `3001` / `127.0.0.1`).
 
@@ -468,7 +523,7 @@ curl -sS http://127.0.0.1:3001/api/interviews/<id>
 
 ---
 
-*Last updated to match the codebase layout and behavior as of this document.*
+*Last updated: live-session API, Chrome extension, and `InterviewLiveSession` models are reflected above.*
 
 
 ## License

@@ -72,7 +72,6 @@ export class OpenAiLlmClient implements LlmClient {
         },
       ],
       temperature: params.temperature ?? 0.4,
-      max_tokens: params.maxTokens ?? 4096,
     });
     const text = completion.choices[0]?.message?.content ?? "";
     return { text };

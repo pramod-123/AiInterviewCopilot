@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Ai Interview Copilot — Live capture",
+  "version": "1.7.3",
+  "description": "Records the LeetCode tab (video + tab audio) and editor snapshots to your AiInterviewCopilot server.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "scripting", "tabs", "tabCapture", "sidePanel", "activeTab"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://leetcode.com/*",
+    "https://*.leetcode.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Interview Copilot (LeetCode)"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' http://127.0.0.1:* http://localhost:* https://leetcode.com https://*.leetcode.com; object-src 'self'"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://leetcode.com/*", "https://*.leetcode.com/*"],
+      "js": ["content/leetcodeEditor.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

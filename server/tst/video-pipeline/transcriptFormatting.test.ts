@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SpeechSegment, SpeechTranscription } from "../../src/types/speechTranscription.js";
 import {
   alignFramesToSpeech,
+  applyCarryForwardEditorSnapshots,
   buildFinalTranscriptJson,
   finalTranscriptToEvaluationTimeline,
   stringifyInterviewTimelineForEvaluation,
@@ -36,6 +37,65 @@ describe("buildFinalTranscriptJson", () => {
     const final = buildFinalTranscriptJson(transcription, [], []);
     const withSpeech = final.find((s) => s.audioTranscript === "x");
     expect(withSpeech?.frameData).toEqual([]);
+  });
+});
+
+describe("applyCarryForwardEditorSnapshots", () => {
+  it("fills empty speech slices with the previous segment code", () => {
+    const final = [
+      {
+        start: 0,
+        end: 500,
+        audioTranscript: "one",
+        frameData: [{ frameNumber: 1, text: "const a = 1;" }],
+      },
+      {
+        start: 500,
+        end: 1000,
+        audioTranscript: "two",
+        frameData: [],
+      },
+    ];
+    const out = applyCarryForwardEditorSnapshots(final);
+    expect(out[0]!.frameData).toEqual([{ frameNumber: 1, text: "const a = 1;" }]);
+    expect(out[1]!.frameData).toEqual([{ frameNumber: 0, text: "const a = 1;" }]);
+  });
+
+  it("does not add frameData to non-speech gaps", () => {
+    const final = [
+      {
+        start: 0,
+        end: 400,
+        audioTranscript: "",
+        frameData: [],
+      },
+      {
+        start: 400,
+        end: 900,
+        audioTranscript: "hi",
+        frameData: [{ frameNumber: 1, text: "x" }],
+      },
+    ];
+    const out = applyCarryForwardEditorSnapshots(final);
+    expect(out[0]!.frameData).toEqual([]);
+    expect(out[1]!.frameData).toEqual([{ frameNumber: 1, text: "x" }]);
+  });
+
+  it("updates carry source from the last snapshot in a multi-frame speech slice", () => {
+    const final = [
+      {
+        start: 0,
+        end: 300,
+        audioTranscript: "a",
+        frameData: [
+          { frameNumber: 1, text: "v1" },
+          { frameNumber: 2, text: "v2" },
+        ],
+      },
+      { start: 300, end: 600, audioTranscript: "b", frameData: [] },
+    ];
+    const out = applyCarryForwardEditorSnapshots(final);
+    expect(out[1]!.frameData).toEqual([{ frameNumber: 0, text: "v2" }]);
   });
 });
 

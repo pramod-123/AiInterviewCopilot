@@ -4,7 +4,8 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:../data/app.db"
+  /// Single connection avoids SQLite writer lock contention across a pool (see P1008 / "database is locked").
+  url      = "file:../data/app.db?connection_limit=1"
 }
 
 enum JobStatus {
@@ -26,6 +27,10 @@ model Job {
   errorMessage String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  /// When set, this job was spawned from a browser live session (tab capture + code snapshots).
+  liveSessionId String?               @unique
+  liveSession   InterviewLiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
 
   interviewAudio      InterviewAudio?
   interviewVideo      InterviewVideo?
@@ -79,4 +84,52 @@ model Result {
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   payload   Json
   createdAt DateTime @default(now())
+}
+
+/// Browser extension live capture: screen chunks + periodic editor snapshots (e.g. LeetCode).
+enum LiveSessionStatus {
+  ACTIVE
+  ENDED
+}
+
+model InterviewLiveSession {
+  id        String            @id @default(uuid())
+  status    LiveSessionStatus @default(ACTIVE)
+  /// Problem statement / prompt scraped when recording starts (e.g. LeetCode).
+  question  String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  videoChunks     LiveVideoChunk[]
+  codeSnapshots   LiveCodeSnapshot[]
+  postProcessJob  Job?
+}
+
+model LiveVideoChunk {
+  id        String               @id @default(uuid())
+  sessionId String
+  session   InterviewLiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sequence  Int
+  filePath  String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime             @default(now())
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId])
+}
+
+model LiveCodeSnapshot {
+  id         String               @id @default(uuid())
+  sessionId  String
+  session    InterviewLiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sequence   Int
+  code       String
+  /// Seconds from the start of tab capture (t≈0 on merged recording / audio SRT timeline).
+  offsetSeconds Float @default(0)
+  capturedAt DateTime
+  createdAt  DateTime             @default(now())
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId])
 }
