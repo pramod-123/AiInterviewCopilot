@@ -36,6 +36,9 @@
     "openai": "^4.85.4",
     "sharp": "^0.34.5"
   },
+  "overrides": {
+    "effect": ">=3.20.0"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.10",

@@ -37,8 +37,8 @@ process.once("SIGTERM", () => {
 
 try {
   await prisma.$connect();
-  // SQLite: wait on locks (P1008). PRAGMA returns a row — must use queryRaw, not executeRaw.
-  await prisma.$queryRawUnsafe("PRAGMA busy_timeout = 30000");
+  // SQLite: wait on locks (P1008). PRAGMA returns a row — use tagged $queryRaw (safe, static string).
+  await prisma.$queryRaw`PRAGMA busy_timeout = 30000`;
 
   await server.registerPlugins();
   server.registerRoutes();
