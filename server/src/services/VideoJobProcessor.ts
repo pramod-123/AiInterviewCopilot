@@ -213,10 +213,7 @@ export class VideoJobProcessor {
         roiCrop: run.cropUsed,
         ocrFrameCount: run.frameOcrTexts.length,
         extractedFrameCount: run.extractedFrameCount,
-        problemStatementPreview:
-          run.problemStatement != null && run.problemStatement.length > 500
-            ? `${run.problemStatement.slice(0, 500)}…`
-            : run.problemStatement,
+        problemStatement: run.problemStatement,
         finalTranscript: run.finalTranscript,
         alignedTimeline: run.alignedTimeline,
       },

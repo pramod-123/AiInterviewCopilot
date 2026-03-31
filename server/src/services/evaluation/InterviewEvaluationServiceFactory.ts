@@ -24,7 +24,7 @@ function evaluationTemperatureFromEnv(env: NodeJS.ProcessEnv): number {
   if (!Number.isFinite(n)) {
     return DEFAULT_LLM_EVAL_TEMPERATURE;
   }
-  return Math.min(2, Math.max(0, n));
+  return n;
 }
 
 /**

@@ -49,15 +49,7 @@ export class SpeechTranscriptionEvaluationOrchestrator {
       finalTranscript = applyCarryForwardEditorSnapshots(finalTranscript);
     }
     const timelineSegs = finalTranscriptToEvaluationTimeline(finalTranscript);
-    const maxRaw = process.env.INTERVIEW_EVAL_TIMELINE_MAX_CHARS?.trim();
-    let maxChars = maxRaw ? Number(maxRaw) : 180_000;
-    if (!Number.isFinite(maxChars) || maxChars < 10_000) {
-      maxChars = 180_000;
-    }
-    evalInput.interviewTimelineJson = stringifyInterviewTimelineForEvaluation(
-      timelineSegs,
-      maxChars,
-    );
+    evalInput.interviewTimelineJson = stringifyInterviewTimelineForEvaluation(timelineSegs);
     const problem = options?.problemStatementText?.trim();
     if (problem) {
       evalInput.problemStatementText = problem;

@@ -306,53 +306,10 @@ export function finalTranscriptToEvaluationTimeline(
 }
 
 /**
- * Pretty-printed JSON array for the evaluation user prompt. Shrinks `frameData` from the end
- * until the string fits `maxChars` (or drops trailing segments).
+ * Pretty-printed JSON array for the evaluation user prompt (full timeline, no truncation).
  */
 export function stringifyInterviewTimelineForEvaluation(
   segments: InterviewEvaluationTimelineSegment[],
-  maxChars: number,
 ): string {
-  const working = segments.map((seg) => ({
-    start: seg.start,
-    end: seg.end,
-    speech: seg.speech,
-    frameData: [...seg.frameData],
-  }));
-
-  const note = "\n\n... [interview timeline truncated for evaluation context limit]";
-  for (let iter = 0; iter < 500_000; iter++) {
-    const body = JSON.stringify(working, null, 2);
-    if (body.length <= maxChars) {
-      return body;
-    }
-    let removed = false;
-    for (let i = working.length - 1; i >= 0 && !removed; i--) {
-      if (working[i]!.frameData.length > 0) {
-        working[i]!.frameData.pop();
-        removed = true;
-      }
-    }
-    if (!removed) {
-      for (let i = working.length - 1; i >= 0 && !removed; i--) {
-        const sp = working[i]!.speech;
-        if (sp.length > 120) {
-          working[i]!.speech = `${sp.slice(0, sp.length - 600)}…[speech truncated]`;
-          removed = true;
-        }
-      }
-    }
-    if (!removed && working.length > 1) {
-      working.pop();
-      continue;
-    }
-    if (!removed) {
-      const b = JSON.stringify(working, null, 2);
-      if (b.length <= maxChars) {
-        return b;
-      }
-      return `${b.slice(0, Math.max(0, maxChars - note.length))}${note}`;
-    }
-  }
-  return "[]";
+  return JSON.stringify(segments, null, 2);
 }

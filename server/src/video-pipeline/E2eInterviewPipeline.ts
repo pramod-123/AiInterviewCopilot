@@ -17,7 +17,6 @@ import {
   FfmpegRunner,
   writeFramesManifest,
 } from "./ffmpegExtract.js";
-import { truncateProblemStatementForEvaluation } from "../prompts/buildEvaluationUserMessage.js";
 import {
   alignFramesToSpeech,
   buildFinalTranscriptJson,
@@ -430,9 +429,7 @@ export class E2eInterviewPipeline {
     const timesAligned = times.slice(0, alignN);
 
     const jobId = sttEvalJobId ?? `e2e-${path.basename(outputDir)}`;
-    const problemForEval = problemStatement?.trim()
-      ? truncateProblemStatementForEvaluation(problemStatement)
-      : undefined;
+    const problemForEval = problemStatement?.trim() ? problemStatement.trim() : undefined;
     this.progress("Speech-to-text (Whisper) + interview rubric evaluation…");
     const evalOptions: TranscribeAndEvaluateOptions = {
       evaluationFrameTimesSec: timesAligned,
@@ -462,12 +459,7 @@ export class E2eInterviewPipeline {
         outputDir,
         maxInputDurationSec: maxInputDurationSec ?? null,
         cropUsed: crop,
-        problemStatementPreview:
-          problemStatement != null
-            ? problemStatement.length > 500
-              ? `${problemStatement.slice(0, 500)}…`
-              : problemStatement
-            : null,
+        problemStatementText: problemStatement,
         files: {
           audioWav,
           videoVideoOnly,

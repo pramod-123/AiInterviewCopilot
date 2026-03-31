@@ -264,11 +264,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
 
   const extractedProblemStatement = roiResult.problemStatement;
   if (extractedProblemStatement) {
-    console.log(
-      "Problem (from screen):",
-      extractedProblemStatement.slice(0, 200) +
-        (extractedProblemStatement.length > 200 ? "…" : ""),
-    );
+    console.log("Problem (from screen):", extractedProblemStatement);
     await fsPromises.writeFile(
       path.join(outDir, "problem-statement-extracted.txt"),
       extractedProblemStatement,
@@ -297,12 +293,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
     input: inputPath,
     editorRoi: true,
     crop,
-    problemStatementFromScreen:
-      extractedProblemStatement != null
-        ? extractedProblemStatement.length > 600
-          ? `${extractedProblemStatement.slice(0, 600)}…`
-          : extractedProblemStatement
-        : null,
+    problemStatementFromScreen: extractedProblemStatement ?? null,
     problemStatementExtractedFile: extractedProblemStatement
       ? "problem-statement-extracted.txt"
       : null,
@@ -383,12 +374,13 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
   );
   await fsPromises.writeFile(finalTranscriptPath, JSON.stringify(finalTranscript, null, 2), "utf-8");
 
-  let problemStatementPreview: string | null;
+  let problemStatementText: string | null;
   try {
-    const ps = await fsPromises.readFile(problemPath, "utf-8");
-    problemStatementPreview = ps.length > 500 ? `${ps.slice(0, 500)}…` : ps;
+    const raw = await fsPromises.readFile(problemPath, "utf-8");
+    const t = raw.trim();
+    problemStatementText = t.length > 0 ? t : null;
   } catch {
-    problemStatementPreview = null;
+    problemStatementText = null;
   }
 
   const result = {
@@ -397,7 +389,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
       outputDir: outDir,
       maxInputDurationSec: null,
       cropUsed: null,
-      problemStatementPreview,
+      problemStatementText,
       note: "Finished via pipelineCli finish-e2e (STT + OCR + rubric evaluation).",
       files: {
         audioWav,

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildEvaluationUserMessage,
-  truncateProblemStatementForEvaluation,
-} from "../../src/prompts/buildEvaluationUserMessage.js";
+import { buildEvaluationUserMessage } from "../../src/prompts/buildEvaluationUserMessage.js";
 import type { InterviewEvaluationInput } from "../../src/types/interviewEvaluation.js";
 
 describe("buildEvaluationUserMessage", () => {
@@ -37,23 +34,3 @@ describe("buildEvaluationUserMessage", () => {
   });
 });
 
-describe("truncateProblemStatementForEvaluation", () => {
-  const prev = process.env.INTERVIEW_EVAL_PROBLEM_MAX_CHARS;
-
-  it("returns empty for whitespace-only input", () => {
-    expect(truncateProblemStatementForEvaluation("  \n  ")).toBe("");
-  });
-
-  it("truncates when env cap is below input length (min cap 2000 in implementation)", () => {
-    process.env.INTERVIEW_EVAL_PROBLEM_MAX_CHARS = "2000";
-    const long = "b".repeat(3500);
-    const got = truncateProblemStatementForEvaluation(long);
-    expect(got.length).toBeLessThan(long.length);
-    expect(got).toContain("problem statement truncated");
-    if (prev === undefined) {
-      delete process.env.INTERVIEW_EVAL_PROBLEM_MAX_CHARS;
-    } else {
-      process.env.INTERVIEW_EVAL_PROBLEM_MAX_CHARS = prev;
-    }
-  });
-});

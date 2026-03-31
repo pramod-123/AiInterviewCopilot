@@ -115,19 +115,14 @@ describe("finalTranscriptToEvaluationTimeline", () => {
 });
 
 describe("stringifyInterviewTimelineForEvaluation", () => {
-  it("returns pretty JSON when under maxChars", () => {
-    const segs = [{ start: 0, end: 1, speech: "a", frameData: [] as string[] }];
-    const s = stringifyInterviewTimelineForEvaluation(segs, 10_000);
+  it("returns pretty JSON for the full timeline", () => {
+    const segs = [
+      { start: 0, end: 1, speech: "a", frameData: [] as string[] },
+      { start: 1, end: 2, speech: "x".repeat(500), frameData: ["a", "b", "c"] },
+    ];
+    const s = stringifyInterviewTimelineForEvaluation(segs);
     expect(s).toContain('"start": 0');
     expect(JSON.parse(s)).toEqual(segs);
-  });
-
-  it("shrinks when over maxChars", () => {
-    const segs = [
-      { start: 0, end: 1, speech: "x".repeat(500), frameData: ["a", "b", "c"] },
-    ];
-    const s = stringifyInterviewTimelineForEvaluation(segs, 80);
-    expect(s.length).toBeLessThanOrEqual(80 + 200);
   });
 });
 
