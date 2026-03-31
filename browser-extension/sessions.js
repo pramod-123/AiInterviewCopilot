@@ -878,21 +878,12 @@ function renderTokenMetaUnderSession(payload) {
     payload.evaluation && typeof payload.evaluation === "object"
       ? /** @type {Record<string, unknown>} */ (payload.evaluation)
       : null;
-  const pipelineObj =
-    payload.pipeline && typeof payload.pipeline === "object"
-      ? /** @type {Record<string, unknown>} */ (payload.pipeline)
-      : null;
-
   const evalUsage =
     evaluation && evaluation.tokenUsage && typeof evaluation.tokenUsage === "object"
       ? /** @type {Record<string, unknown>} */ (evaluation.tokenUsage)
       : null;
-  const roiUsage =
-    pipelineObj && pipelineObj.roiTokenUsage && typeof pipelineObj.roiTokenUsage === "object"
-      ? /** @type {Record<string, unknown>} */ (pipelineObj.roiTokenUsage)
-      : null;
 
-  if (!evalUsage && !roiUsage) return;
+  if (!evalUsage) return;
 
   /** @param {Record<string, unknown>} u @param {string} k */
   function n(u, k) {
@@ -929,20 +920,6 @@ function renderTokenMetaUnderSession(payload) {
     const span = document.createElement("span");
     span.className = "ic-token-meta-line";
     span.textContent = line(label, evalUsage, model);
-    wrap.appendChild(span);
-  }
-  if (roiUsage) {
-    const span = document.createElement("span");
-    span.className = "ic-token-meta-line";
-    span.textContent = line("vision roi", roiUsage, null);
-    wrap.appendChild(span);
-  }
-  if (evalUsage && roiUsage) {
-    const totalIn = n(evalUsage, "inputTokens") + n(roiUsage, "inputTokens");
-    const totalOut = n(evalUsage, "outputTokens") + n(roiUsage, "outputTokens");
-    const span = document.createElement("span");
-    span.className = "ic-token-meta-line";
-    span.textContent = `combined  ·  in ${totalIn.toLocaleString()}  ·  out ${totalOut.toLocaleString()}  ·  total ${(totalIn + totalOut).toLocaleString()}`;
     wrap.appendChild(span);
   }
 

@@ -9,7 +9,6 @@ import type { IDedupedFrameExtractor } from "../services/video/IDedupedFrameExtr
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
 import type { SpeechTranscription } from "../types/speechTranscription.js";
 import { readPngDimensions, type EditorRoiDetectionService } from "./editorRoiDetection.js";
-import type { LlmTokenUsage } from "../services/llm/LlmClient.js";
 import {
   buildRoiCropEncodeFilter,
   EDITOR_ROI_POST_CROP_TARGET_WIDTH_PX,
@@ -53,8 +52,6 @@ export type E2eInterviewPipelineRunResult = {
   cropUsed: VideoCropRect;
   extractedFrameCount: number;
   problemStatement: string | null;
-  /** Token usage from the vision ROI LLM call. */
-  roiTokenUsage?: LlmTokenUsage;
 };
 
 /** Injected collaborators for {@link E2eInterviewPipeline} (vision ROI, frame extract, STT + rubric LLM). */
@@ -523,7 +520,6 @@ export class E2eInterviewPipeline {
       cropUsed: crop,
       extractedFrameCount: manifest.length,
       problemStatement,
-      roiTokenUsage: roiResult.tokenUsage,
     };
   }
 }
