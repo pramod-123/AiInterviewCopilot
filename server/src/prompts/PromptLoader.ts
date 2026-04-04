@@ -3,16 +3,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Loads markdown (or plain text) prompt files from `server/prompts/`.
+ * Loads markdown (or plain text) prompt files from `server/prompts/`; agent personas from `server/agents/<id>/AGENT.md`.
  * Works when running from `src` (tsx) or `dist` (compiled): both resolve to the same `server/` root.
  */
 export class PromptLoader {
   private readonly promptsDir: string;
+  private readonly agentsDir: string;
 
   constructor() {
     const here = path.dirname(fileURLToPath(import.meta.url));
     const serverRoot = path.resolve(here, "..", "..");
     this.promptsDir = path.join(serverRoot, "prompts");
+    this.agentsDir = path.join(serverRoot, "agents");
   }
 
   loadSync(filename: string): string {
@@ -22,6 +24,21 @@ export class PromptLoader {
     } catch (err) {
       const hint = err instanceof Error ? err.message : String(err);
       throw new Error(`Failed to read prompt file "${filename}" at ${full}: ${hint}`, {
+        cause: err,
+      });
+    }
+  }
+
+  /**
+   * Loads `server/agents/{agentDir}/AGENT.md` (voice / agent personas). ROI and other templates stay under `prompts/`.
+   */
+  loadAgentSync(agentDir: string): string {
+    const full = path.join(this.agentsDir, agentDir, "AGENT.md");
+    try {
+      return fs.readFileSync(full, "utf-8").trim();
+    } catch (err) {
+      const hint = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to read agent prompt "${agentDir}/AGENT.md" at ${full}: ${hint}`, {
         cause: err,
       });
     }

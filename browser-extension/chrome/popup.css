@@ -276,16 +276,20 @@ main.popup-main {
   transition: transform 0.2s ease;
 }
 
-.mic-bento:has(#chkPopupMic:checked) .switch-knob {
+/* Each row must scope :has() to its own checkbox — the live row does not contain #chkPopupMic. */
+.mic-bento-mic:has(#chkPopupMic:checked) .switch-knob,
+.mic-bento-live:has(#chkPopupLiveInterviewer:checked) .switch-knob {
   transform: translateX(14px);
 }
 
-.mic-bento:not(:has(#chkPopupMic:checked)) .switch {
+.mic-bento-mic:not(:has(#chkPopupMic:checked)) .switch,
+.mic-bento-live:not(:has(#chkPopupLiveInterviewer:checked)) .switch {
   background: rgba(117, 117, 117, 0.2);
   border-color: rgba(117, 117, 117, 0.35);
 }
 
-.mic-bento:not(:has(#chkPopupMic:checked)) .switch-knob {
+.mic-bento-mic:not(:has(#chkPopupMic:checked)) .switch-knob,
+.mic-bento-live:not(:has(#chkPopupLiveInterviewer:checked)) .switch-knob {
   background: var(--on-surface-variant);
   box-shadow: none;
 }

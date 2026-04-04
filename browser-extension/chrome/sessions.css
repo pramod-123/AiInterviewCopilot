@@ -440,10 +440,22 @@ body {
 
 .sess-session-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 4px 8px;
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+.sess-offline-stt {
+  width: 100%;
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .sess-session-meta .material-icons-round {
@@ -896,6 +908,30 @@ body {
   color: rgba(0, 255, 157, 0.55);
   margin-right: 6px;
   font-size: 0.72rem;
+}
+
+.sess-trans-speaker {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(180, 200, 255, 0.85);
+}
+
+.sess-trans-speaker[data-speaker-key="INTERVIEWER"] {
+  color: rgba(120, 200, 255, 0.95);
+}
+
+.sess-trans-speaker[data-speaker-key="INTERVIEWEE"] {
+  color: rgba(0, 255, 157, 0.75);
+}
+
+.sess-trans-speaker.sess-trans-speaker--unknown {
+  color: rgba(255, 255, 255, 0.22);
+  font-weight: 500;
+  min-width: 1.25em;
+  text-align: center;
 }
 
 .sess-trans-line.is-seek-highlight {

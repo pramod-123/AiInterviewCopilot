@@ -36,7 +36,7 @@ export function assertMandatoryVisionRoi(
 }
 
 /**
- * @param visionOpenAiLlm — same OpenAI {@link LlmClient} used for {@link EditorRoiDetectionService} (create once with `LlmClientFactory.tryCreate("openai", env)`).
+ * @param visionOpenAiLlm — same OpenAI {@link LlmClient} used for {@link EditorRoiDetectionService} (create once with `OpenAiLlmClient.tryCreate(env)`).
  * @throws If the HTTP interview API cannot run full video+audio+vision processing.
  */
 export function assertMandatoryInterviewApiConfig(

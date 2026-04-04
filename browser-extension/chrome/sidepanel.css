@@ -374,6 +374,20 @@ body {
   color: var(--on-surface-variant);
 }
 
+.capture-status.speaking {
+  color: #f59e0b;
+}
+
+.capture-status.error {
+  color: var(--error);
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  max-width: 9rem;
+  text-align: right;
+  line-height: 1.2;
+}
+
 /* Bounded log panel (scrolls internally) */
 .sp-log-panel {
   flex: 0 0 auto;

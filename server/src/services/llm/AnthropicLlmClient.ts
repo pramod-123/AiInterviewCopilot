@@ -1,4 +1,6 @@
 import fsPromises from "node:fs/promises";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatAnthropic } from "@langchain/anthropic";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 import type { LlmClient, LlmCompletionResult, LlmJsonChatParams, LlmTokenUsage, LlmVisionJsonChatParams } from "./LlmClient.js";
 
@@ -22,6 +24,14 @@ export class AnthropicLlmClient implements LlmClient {
 
   getModelId(): string {
     return this.modelId;
+  }
+
+  toBaseChatModel(temperature: number): BaseChatModel {
+    return new ChatAnthropic({
+      model: this.modelId,
+      temperature,
+      anthropicApiKey: this.apiKey,
+    });
   }
 
   static tryCreate(env: NodeJS.ProcessEnv = process.env): AnthropicLlmClient | null {

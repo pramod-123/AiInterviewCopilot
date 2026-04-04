@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { FramesManifestEntry } from "../types/framesManifest.js";
@@ -219,11 +220,12 @@ export function extractedFramesToManifest(frames: ExtractedFrame[]): FramesManif
 }
 
 export async function writeFramesManifest(
+  files: IAppFileStore,
   manifestPath: string,
   frames: ExtractedFrame[],
 ): Promise<FramesManifestEntry[]> {
   const manifest = extractedFramesToManifest(frames);
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
+  await files.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
   return manifest;
 }
 

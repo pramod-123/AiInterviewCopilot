@@ -50,7 +50,11 @@ function setStatus(text, isError) {
 }
 
 async function loadSettings() {
-  const { apiBase, preferRecordMic } = await chrome.storage.local.get(["apiBase", "preferRecordMic"]);
+  const { apiBase, preferRecordMic, preferLiveInterviewer } = await chrome.storage.local.get([
+    "apiBase",
+    "preferRecordMic",
+    "preferLiveInterviewer",
+  ]);
   const baseEl = document.getElementById("apiBase");
   if (baseEl) {
     baseEl.value = apiBase || DEFAULT_API;
@@ -59,13 +63,23 @@ async function loadSettings() {
   if (chk && typeof preferRecordMic === "boolean") {
     chk.checked = preferRecordMic;
   }
+  const chkLive = document.getElementById("chkPopupLiveInterviewer");
+  if (chkLive && typeof preferLiveInterviewer === "boolean") {
+    chkLive.checked = preferLiveInterviewer;
+  }
 }
 
 document.getElementById("start").addEventListener("click", async () => {
   const rawBase = document.getElementById("apiBase")?.value ?? "";
   const apiBase = rawBase.trim().replace(/\/$/, "") || DEFAULT_API;
   const wantMic = document.getElementById("chkPopupMic")?.checked !== false;
-  await chrome.storage.local.set({ apiBase, preferRecordMic: wantMic });
+  const liveInterviewerEnabled =
+    document.getElementById("chkPopupLiveInterviewer")?.checked !== false;
+  await chrome.storage.local.set({
+    apiBase,
+    preferRecordMic: wantMic,
+    preferLiveInterviewer: liveInterviewerEnabled,
+  });
   setStatus("Creating session…");
 
   try {
@@ -93,7 +107,11 @@ document.getElementById("start").addEventListener("click", async () => {
     }
 
     setStatus("Creating session…");
-    const res = await fetch(`${apiBase}/api/live-sessions`, { method: "POST" });
+    const res = await fetch(`${apiBase}/api/live-sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ liveInterviewerEnabled }),
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setStatus(data.error || `HTTP ${res.status}`, true);
@@ -117,7 +135,7 @@ document.getElementById("start").addEventListener("click", async () => {
     }
 
     await chrome.storage.session.set({
-      pendingRecorder: { sessionId, apiBase, tabId },
+      pendingRecorder: { sessionId, apiBase, tabId, liveInterviewerEnabled },
     });
 
     await chrome.sidePanel.setOptions({

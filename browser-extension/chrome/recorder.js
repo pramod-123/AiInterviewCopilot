@@ -5,6 +5,8 @@ const btnStart = document.getElementById("btnStart");
 const btnStop = document.getElementById("btnStop");
 const btnEnd = document.getElementById("btnEnd");
 const chkMic = document.getElementById("chkMic");
+const chkVoiceAi = document.getElementById("chkVoiceAi");
+const voiceAiStatusEl = document.getElementById("voiceAiStatus");
 const processStatusEl = document.getElementById("processStatus");
 const resultSectionEl = document.getElementById("resultSection");
 const sessionClockEl = document.getElementById("sessionClock");
@@ -28,6 +30,9 @@ let apiBase = "";
 /** @type {number} */
 let leetcodeTabId = NaN;
 
+/** When false, this session was created without Gemini Live; transcript is offline-only after end. */
+let sessionAllowsLiveInterviewer = true;
+
 /** @type {number | null} */
 let codeIntervalId = null;
 
@@ -46,6 +51,9 @@ let tabAudioPassthroughCtx = null;
 
 /** Stops mic tracks after {@link attachMicDirectToTabVideo} (or legacy mixer). */
 let releaseMixer = null;
+
+/** @type {{ stop: () => void } | null} */
+let geminiLiveBridgeHandle = null;
 
 /** @type {number | null} */
 let recordingWallClockId = null;
@@ -123,6 +131,83 @@ function syncCaptureUi() {
   if (analysisPulseEl) {
     analysisPulseEl.classList.toggle("on", recording);
   }
+
+  if (voiceAiStatusEl && !recording) {
+    voiceAiStatusEl.className = "capture-status";
+    const wantVoice = Boolean(chkVoiceAi?.checked);
+    const wantMic = Boolean(chkMic?.checked);
+    if (!wantVoice) {
+      voiceAiStatusEl.classList.add("idle");
+      voiceAiStatusEl.textContent = "Disabled";
+    } else if (!wantMic) {
+      voiceAiStatusEl.classList.add("idle");
+      voiceAiStatusEl.textContent = "Needs mic";
+    } else {
+      voiceAiStatusEl.classList.add("idle");
+      voiceAiStatusEl.textContent = "Starts with recording";
+    }
+  }
+}
+
+/**
+ * @param {string} state
+ * @param {string} [detail]
+ */
+function syncVoiceAiStatus(state, detail) {
+  if (!voiceAiStatusEl) {
+    return;
+  }
+  voiceAiStatusEl.className = "capture-status";
+  if (state === "off") {
+    voiceAiStatusEl.classList.add("idle");
+    voiceAiStatusEl.textContent = "Off";
+    return;
+  }
+  if (state === "need_mic") {
+    voiceAiStatusEl.classList.add("idle");
+    voiceAiStatusEl.textContent = "Need mic";
+    return;
+  }
+  if (state === "disabled_setting") {
+    voiceAiStatusEl.classList.add("idle");
+    voiceAiStatusEl.textContent = "Disabled";
+    return;
+  }
+  if (state === "connecting") {
+    voiceAiStatusEl.classList.add("idle");
+    voiceAiStatusEl.textContent = "Connecting…";
+    return;
+  }
+  if (state === "ready") {
+    voiceAiStatusEl.textContent = "Listening";
+    return;
+  }
+  if (state === "speaking") {
+    voiceAiStatusEl.classList.add("speaking");
+    voiceAiStatusEl.textContent = "Speaking";
+    return;
+  }
+  if (state === "error") {
+    voiceAiStatusEl.classList.add("error");
+    const d = detail && String(detail).trim();
+    voiceAiStatusEl.textContent = d && d.length <= 28 ? d : "Error";
+    return;
+  }
+  voiceAiStatusEl.classList.add("idle");
+  voiceAiStatusEl.textContent = state || "Off";
+}
+
+function stopGeminiLiveBridge() {
+  if (!geminiLiveBridgeHandle) {
+    return;
+  }
+  try {
+    geminiLiveBridgeHandle.stop();
+  } catch {
+    /* ignore */
+  }
+  geminiLiveBridgeHandle = null;
+  syncVoiceAiStatus("off");
 }
 
 /**
@@ -497,6 +582,7 @@ async function uploadVideoChunk(blob) {
 }
 
 function stopTabCapture() {
+  stopGeminiLiveBridge();
   if (tabRecorder && tabRecorder.state !== "inactive") {
     try {
       tabRecorder.stop();
@@ -1001,6 +1087,9 @@ function resetAfterCapturePipeStops(reason) {
   if (chkMic) {
     chkMic.disabled = false;
   }
+  if (chkVoiceAi) {
+    chkVoiceAi.disabled = false;
+  }
   syncCaptureUi();
   if (typeof reason === "string" && reason) {
     log(reason);
@@ -1018,6 +1107,9 @@ async function stopAll(reason) {
   btnStop.disabled = true;
   if (chkMic) {
     chkMic.disabled = false;
+  }
+  if (chkVoiceAi) {
+    chkVoiceAi.disabled = false;
   }
   syncCaptureUi();
   if (reason) {
@@ -1045,13 +1137,55 @@ async function resolveSessionConfig() {
       .replace(/\/$/, "");
     leetcodeTabId =
       typeof pendingRecorder.tabId === "number" ? pendingRecorder.tabId : Number.NaN;
+    if (typeof pendingRecorder.liveInterviewerEnabled === "boolean") {
+      sessionAllowsLiveInterviewer = pendingRecorder.liveInterviewerEnabled;
+    }
+  }
+}
+
+async function syncSessionLiveInterviewerFromServer() {
+  if (!sessionId || !apiBase) {
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase}/api/live-sessions/${encodeURIComponent(sessionId)}`);
+    if (!res.ok) {
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (typeof data.liveInterviewerEnabled === "boolean") {
+      sessionAllowsLiveInterviewer = data.liveInterviewerEnabled;
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyVoiceAiSessionPolicy() {
+  if (!chkVoiceAi) {
+    return;
+  }
+  if (!sessionAllowsLiveInterviewer) {
+    chkVoiceAi.checked = false;
+    chkVoiceAi.disabled = true;
+    chkVoiceAi.setAttribute(
+      "title",
+      "This session was started without the live voice interviewer. Transcript runs offline after you end.",
+    );
+    syncVoiceAiStatus("disabled_setting");
+  } else {
+    chkVoiceAi.disabled = false;
+    chkVoiceAi.removeAttribute("title");
   }
 }
 
 async function init() {
   await resolveSessionConfig();
 
-  const { preferRecordMic } = await chrome.storage.local.get(["preferRecordMic"]);
+  const { preferRecordMic, preferVoiceAi } = await chrome.storage.local.get([
+    "preferRecordMic",
+    "preferVoiceAi",
+  ]);
   if (chkMic && typeof preferRecordMic === "boolean") {
     chkMic.checked = preferRecordMic;
   }
@@ -1065,11 +1199,20 @@ async function init() {
     if (chkMic) {
       chkMic.disabled = true;
     }
+    if (chkVoiceAi) {
+      chkVoiceAi.disabled = true;
+    }
     hideProcessStatus();
     clearResultSection();
     stopRecordingWallClock();
     syncCaptureUi();
     return;
+  }
+
+  await syncSessionLiveInterviewerFromServer();
+  applyVoiceAiSessionPolicy();
+  if (sessionAllowsLiveInterviewer && chkVoiceAi && typeof preferVoiceAi === "boolean") {
+    chkVoiceAi.checked = preferVoiceAi;
   }
 
   if (metaEl) {
@@ -1079,6 +1222,15 @@ async function init() {
   if (chkMic) {
     chkMic.addEventListener("change", () => {
       void chrome.storage.local.set({ preferRecordMic: chkMic.checked });
+      syncCaptureUi();
+    });
+  }
+  if (chkVoiceAi) {
+    chkVoiceAi.addEventListener("change", () => {
+      if (!sessionAllowsLiveInterviewer) {
+        return;
+      }
+      void chrome.storage.local.set({ preferVoiceAi: chkVoiceAi.checked });
       syncCaptureUi();
     });
   }
@@ -1171,31 +1323,29 @@ async function init() {
         /* ignore */
       }
 
-      void (async () => {
-        let question = "";
-        try {
-          question = await pullQuestionFromLeetCodeTab();
-        } catch {
-          question = "";
-        }
-        try {
-          await pushQuestionToServer(question);
-          const slugOnly =
-            question.length > 0 &&
-            /Full statement was not readable|Keep the problem \*\*Description\*\*/i.test(question);
-          log(
-            question.length > 0
-              ? slugOnly
-                ? `question saved (${question.length} chars; slug/meta only — open Description tab for full text if needed)`
-                : `question saved (${question.length} chars)`
-              : "question empty (not on a /problems/… page, or page blocked script access)",
-          );
-        } catch (e) {
-          log(
-            `question save failed: ${e instanceof Error ? e.message : String(e)} — capture continues`,
-          );
-        }
-      })();
+      let question = "";
+      try {
+        question = await pullQuestionFromLeetCodeTab();
+      } catch {
+        question = "";
+      }
+      try {
+        await pushQuestionToServer(question);
+        const slugOnly =
+          question.length > 0 &&
+          /Full statement was not readable|Keep the problem \*\*Description\*\*/i.test(question);
+        log(
+          question.length > 0
+            ? slugOnly
+              ? `question saved (${question.length} chars; slug/meta only — open Description tab for full text if needed)`
+              : `question saved (${question.length} chars)`
+            : "question empty (not on a /problems/… page, or page blocked script access)",
+        );
+      } catch (e) {
+        log(
+          `question save failed: ${e instanceof Error ? e.message : String(e)} — capture continues`,
+        );
+      }
 
       lastUploadedCode = null;
       await pullAndUploadCodeInitial();
@@ -1210,13 +1360,53 @@ async function init() {
       if (chkMic) {
         chkMic.disabled = true;
       }
+      if (chkVoiceAi) {
+        chkVoiceAi.disabled = true;
+      }
       syncCaptureUi();
+
+      const wantVoiceAi = Boolean(chkVoiceAi?.checked);
+      if (
+        wantVoiceAi &&
+        releaseMixer &&
+        tabMediaStream &&
+        sessionId &&
+        apiBase &&
+        typeof globalThis.GeminiLiveBridge?.start === "function"
+      ) {
+        try {
+          geminiLiveBridgeHandle = globalThis.GeminiLiveBridge.start({
+            sessionId,
+            apiBase,
+            mediaStream: tabMediaStream,
+            log,
+            onStatus: (state, detail) => {
+              syncVoiceAiStatus(state, detail);
+            },
+          });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          log(`Voice interviewer: ${msg}`);
+          syncVoiceAiStatus("error", msg);
+        }
+      } else if (wantVoiceAi && !releaseMixer) {
+        log("Voice interviewer skipped — enable Record microphone.");
+        syncVoiceAiStatus("need_mic");
+      } else if (wantVoiceAi && releaseMixer && typeof globalThis.GeminiLiveBridge?.start !== "function") {
+        log("Voice interviewer unavailable — reload the extension (geminiLiveBridge.js not loaded).");
+        syncVoiceAiStatus("error", "Reload extension");
+      } else if (!wantVoiceAi) {
+        syncVoiceAiStatus("disabled_setting");
+      }
     } catch (e) {
       log(`start failed: ${e instanceof Error ? e.message : String(e)}`);
       stopTabCapture();
       stopRecordingWallClock();
       if (chkMic) {
         chkMic.disabled = false;
+      }
+      if (chkVoiceAi) {
+        chkVoiceAi.disabled = false;
       }
       syncCaptureUi();
     }

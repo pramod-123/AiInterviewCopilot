@@ -1,4 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
+import type { IAppDao } from "../dao/IAppDao.js";
+import { appDao } from "../db.js";
 import { InterviewEvaluationServiceFactory } from "./evaluation/InterviewEvaluationServiceFactory.js";
 import { SpeechToTextServiceFactory } from "./speech-to-text/SpeechToTextServiceFactory.js";
 import { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscriptionEvaluationOrchestrator.js";
@@ -9,8 +11,12 @@ import { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscription
 export class SpeechTranscriptionEvaluationOrchestratorFactory {
   constructor(
     private readonly speechToTextFactory: SpeechToTextServiceFactory = new SpeechToTextServiceFactory(),
-    private readonly evaluationFactory: InterviewEvaluationServiceFactory = new InterviewEvaluationServiceFactory(),
+    private readonly evaluationFactory: InterviewEvaluationServiceFactory = new InterviewEvaluationServiceFactory(
+      process.env,
+      appDao,
+    ),
     private readonly evaluationPromptLog?: FastifyBaseLogger,
+    private readonly db: IAppDao = appDao,
   ) {}
 
   tryCreate(): SpeechTranscriptionEvaluationOrchestrator | null {
@@ -21,6 +27,7 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
     return new SpeechTranscriptionEvaluationOrchestrator(
       stt,
       this.evaluationFactory.create(this.evaluationPromptLog),
+      this.db,
     );
   }
 
@@ -37,6 +44,7 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
     return new SpeechTranscriptionEvaluationOrchestrator(
       stt,
       this.evaluationFactory.create(this.evaluationPromptLog),
+      this.db,
     );
   }
 }

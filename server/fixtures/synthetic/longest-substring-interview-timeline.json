@@ -1,0 +1,160 @@
+[
+  {
+    "start": 0,
+    "end": 12000,
+    "speech": "Hi, yeah, thanks for having me. So longest substring without repeating characters. I've seen this one before, kind of the classic sliding window thing, I think.",
+    "frameData": ["// Longest substring no repeat\nfunction lengthOfLongest(s) {\n  \n}"]
+  },
+  {
+    "start": 12000,
+    "end": 28000,
+    "speech": "Let me restate it. We need the max length of a subsequence—sorry, substring—where all characters are unique. Not subsequence, substring, contiguous.",
+    "frameData": [
+      "// Longest substring no repeat\nfunction lengthOfLongest(s) {\n  // brute force first?\n}\n"
+    ]
+  },
+  {
+    "start": 28000,
+    "end": 52000,
+    "speech": "My first instinct is nested loops: for every start index, expand until we see a repeat and track the max. That's probably like n squared, which might be fine for interviews sometimes, but I'll optimize after.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let max = 0;\n  for (let i = 0; i < s.length; i++) {\n    const seen = new Set();\n    for (let j = i; j < s.length; j++) {\n      \n    }\n  }\n}\n"
+    ]
+  },
+  {
+    "start": 52000,
+    "end": 78000,
+    "speech": "Inner loop: if character already in seen, we should... actually I'll add it first then check—wait, I'll check before adding. If seen has s of j, break. Otherwise add and update max.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let max = 0;\n  for (let i = 0; i < s.length; i++) {\n    const seen = new Set();\n    for (let j = i; j < s.length; j++) {\n      if (seen.has(s[j])) break;\n      seen.add(s[j]);\n      max = Math.max(max, j - i);\n    }\n  }\n  return max;\n}\n"
+    ]
+  },
+  {
+    "start": 78000,
+    "end": 105000,
+    "speech": "Hmm. Actually is j minus i right? When j equals i that's zero but we have one character. So maybe it should be j minus i plus one. I'll change that.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let max = 0;\n  for (let i = 0; i < s.length; i++) {\n    const seen = new Set();\n    for (let j = i; j < s.length; j++) {\n      if (seen.has(s[j])) break;\n      seen.add(s[j]);\n      max = Math.max(max, j - i + 1);\n    }\n  }\n  return max;\n}\n"
+    ]
+  },
+  {
+    "start": 105000,
+    "end": 132000,
+    "speech": "Time complexity: outer n inner n so n squared. Space, the set could be up to alphabet size, so constant if we assume ASCII, roughly.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let max = 0;\n  for (let i = 0; i < s.length; i++) {\n    const seen = new Set();\n    for (let j = i; j < s.length; j++) {\n      if (seen.has(s[j])) break;\n      seen.add(s[j]);\n      max = Math.max(max, j - i + 1);\n    }\n  }\n  return max;\n}\n"
+    ]
+  },
+  {
+    "start": 132000,
+    "end": 158000,
+    "speech": "Can we do better? Sliding window with two pointers. Left and right. We move right, if duplicate we move left until it's valid again. I'll use a map from char to index.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    \n  }\n}\n"
+    ]
+  },
+  {
+    "start": 158000,
+    "end": 188000,
+    "speech": "If last of s at right exists and is greater than or equal to left, set left to last plus one. Then store last of s at right equals right. Max length is max of maxLen and right minus left.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 188000,
+    "end": 215000,
+    "speech": "Wait, I need to handle when last of c is undefined. In JavaScript undefined compared to number might be weird. I'll use if last c is not undefined and last c greater or equal left.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 215000,
+    "end": 242000,
+    "speech": "Actually for the length, when right and left are both zero we have one character so it should be right minus left plus one. Let me fix that.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 242000,
+    "end": 275000,
+    "speech": "Complexity now is O of n log n) because the map operations—actually hash map is O(1) average so linear time, O of n. Space is O of min n, alphabet).",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 275000,
+    "end": 305000,
+    "speech": "Let me trace p w w k e w mentally. When second w, we jump left... should give three for w k e. I think that's right.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 305000,
+    "end": 338000,
+    "speech": "Interviewer: What about empty string? Me: Oh, the loops just don't run, maxLen stays zero, return zero. Good.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 338000,
+    "end": 375000,
+    "speech": "Could also use a Set and while loop to shrink from the left—same idea. I like the last index version because it's one pass.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 375000,
+    "end": 412000,
+    "speech": "If the string had only spaces or unicode, the map still works, keys are strings. Space complexity is O of n) in worst case all unique—wait that's still bounded by length of s.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 412000,
+    "end": 455000,
+    "speech": "Testing: b b b b b should return 1. My code... yeah maxLen updates each step. For a b c a b c, longest is a b c length three.",
+    "frameData": [
+      "// tests\nconsole.log(lengthOfLongest('abcabcbb'));\nconsole.log(lengthOfLongest('bbbbb'));\n\nfunction lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 455000,
+    "end": 498000,
+    "speech": "One more edge: single character string. Should be 1. Right zero, left zero, plus one gives one. Cool.",
+    "frameData": [
+      "console.log(lengthOfLongest('z'));\n\nfunction lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 498000,
+    "end": 540000,
+    "speech": "I'm trying to think if there's a bug with zero-based index when we jump left. If duplicate at same index as left, we set left to last c plus one, window should exclude the old char. Sounds right.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 540000,
+    "end": 585000,
+    "speech": "Alternative: for each character we could binary search—no that doesn't apply here. So linear scan is the right idea.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  },
+  {
+    "start": 585000,
+    "end": 600000,
+    "speech": "That's my final answer unless you want it in another language. Thanks.",
+    "frameData": [
+      "function lengthOfLongest(s) {\n  let left = 0, maxLen = 0;\n  const last = {};\n  for (let right = 0; right < s.length; right++) {\n    const c = s[right];\n    if (last[c] != null && last[c] >= left) left = last[c] + 1;\n    last[c] = right;\n    maxLen = Math.max(maxLen, right - left + 1);\n  }\n  return maxLen;\n}\n"
+    ]
+  }
+]

@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import path from "node:path";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import { FfmpegDedupedFrameExtractor } from "../services/video/FfmpegDedupedFrameExtractor.js";
 import type { IDedupedFrameExtractor } from "../services/video/IDedupedFrameExtractor.js";
 import {
@@ -38,6 +38,7 @@ export type VideoProcessingOptions = {
  */
 export class VideoProcessingPipeline {
   constructor(
+    private readonly files: IAppFileStore,
     private readonly inputPath: string,
     private readonly outputDir: string,
     private readonly ffmpeg: FfmpegRunner,
@@ -47,9 +48,9 @@ export class VideoProcessingPipeline {
   ) {}
 
   async run(): Promise<VideoPipelineArtifacts> {
-    await fs.mkdir(this.outputDir, { recursive: true });
+    await this.files.mkdir(this.outputDir, { recursive: true });
     const framesDir = path.join(this.outputDir, "frames");
-    await fs.mkdir(framesDir, { recursive: true });
+    await this.files.mkdir(framesDir, { recursive: true });
 
     const audioWav = path.join(this.outputDir, "audio.wav");
     const firstFramePng = path.join(this.outputDir, "first-frame.png");
@@ -94,9 +95,15 @@ export class VideoProcessingPipeline {
       croppedMp4,
     ]);
 
-    for (const f of await fs.readdir(framesDir).catch(() => [])) {
+    let priorFrames: string[] = [];
+    try {
+      priorFrames = await this.files.readdir(framesDir);
+    } catch {
+      priorFrames = [];
+    }
+    for (const f of priorFrames) {
       if (f.endsWith(".png")) {
-        await fs.unlink(path.join(framesDir, f));
+        await this.files.unlink(path.join(framesDir, f));
       }
     }
 
@@ -110,12 +117,12 @@ export class VideoProcessingPipeline {
       outputDir: framesDir,
       fps,
     });
-    await writeFramesManifest(framesManifestPath, extracted);
+    await writeFramesManifest(this.files, framesManifestPath, extracted);
     console.info(
       `[video-pipeline] Frames: ${extracted.length} (mpdecimate + showinfo${fps != null ? `, fps=${fps}` : ""})`,
     );
 
-    const frameFiles = (await fs.readdir(framesDir)).filter((f) => f.endsWith(".png"));
+    const frameFiles = (await this.files.readdir(framesDir)).filter((f) => f.endsWith(".png"));
     return {
       outputDir: this.outputDir,
       audioWav,

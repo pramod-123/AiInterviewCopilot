@@ -1,4 +1,6 @@
 import fsPromises from "node:fs/promises";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { ChatOpenAI } from "@langchain/openai";
 import type OpenAI from "openai";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 import type { LlmClient, LlmCompletionResult, LlmJsonChatParams, LlmTokenUsage, LlmVisionJsonChatParams } from "./LlmClient.js";
@@ -21,6 +23,13 @@ export class OpenAiLlmClient implements LlmClient {
 
   getModelId(): string {
     return this.modelId;
+  }
+
+  toBaseChatModel(temperature: number): BaseChatModel {
+    return new ChatOpenAI({
+      model: this.modelId,
+      temperature,
+    });
   }
 
   static tryCreate(env: NodeJS.ProcessEnv = process.env): OpenAiLlmClient | null {

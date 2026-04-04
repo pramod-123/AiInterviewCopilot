@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { prisma } from "./db.js";
+import { closeAppDatabase, openAppDatabase } from "./db.js";
 import { InterviewCopilotServer } from "./InterviewCopilotServer.js";
 
 const port = Number(process.env.PORT || 3001);
@@ -21,7 +21,7 @@ async function shutdown(signal: string): Promise<void> {
     server.instance.log.error({ err }, "Error while closing HTTP server");
   }
   try {
-    await prisma.$disconnect();
+    await closeAppDatabase();
   } catch {
     /* ignore */
   }
@@ -36,12 +36,11 @@ process.once("SIGTERM", () => {
 });
 
 try {
-  await prisma.$connect();
-  // SQLite: wait on locks (P1008). PRAGMA returns a row — use tagged $queryRaw (safe, static string).
-  await prisma.$queryRaw`PRAGMA busy_timeout = 30000`;
+  await openAppDatabase();
 
   await server.registerPlugins();
   server.registerRoutes();
+  await server.registerGeminiLiveWebSocket();
   await server.listen(port, host);
 } catch (err) {
   server.instance.log.error(err);

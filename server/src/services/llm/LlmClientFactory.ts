@@ -2,18 +2,22 @@ import { AnthropicLlmClient } from "./AnthropicLlmClient.js";
 import type { LlmClient } from "./LlmClient.js";
 import { OpenAiLlmClient } from "./OpenAiLlmClient.js";
 
-export type LlmChatProviderId = "openai" | "anthropic";
-
 /**
- * Instantiates {@link LlmClient} implementations from env (API keys, model vars). No routing or product messaging.
+ * Instantiates {@link LlmClient} from env. Provider is taken from **`EVALUATION_PROVIDER`**
+ * (`openai` | `anthropic`, default `openai`); `none` or missing keys yield `null`.
  */
 export class LlmClientFactory {
-  static tryCreate(
-    provider: LlmChatProviderId,
-    env: NodeJS.ProcessEnv = process.env,
-  ): LlmClient | null {
-    return provider === "openai"
-      ? OpenAiLlmClient.tryCreate(env)
-      : AnthropicLlmClient.tryCreate(env);
+  static tryCreate(env: NodeJS.ProcessEnv = process.env): LlmClient | null {
+    const raw = env.EVALUATION_PROVIDER?.toLowerCase().trim() ?? "openai";
+    if (raw === "none") {
+      return null;
+    }
+    if (raw === "openai") {
+      return OpenAiLlmClient.tryCreate(env);
+    }
+    if (raw === "anthropic") {
+      return AnthropicLlmClient.tryCreate(env);
+    }
+    return null;
   }
 }

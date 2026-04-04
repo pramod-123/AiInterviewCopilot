@@ -1,28 +1,29 @@
-import type { SpeechUtterance } from "@prisma/client";
+import type { SpeechUtteranceItem } from "../../src/dao/dto.js";
 import { describe, expect, it } from "vitest";
 import { SpeechUtterancePresenter } from "../../src/presenters/SpeechUtterancePresenter.js";
 
-function mockRow(partial: Partial<SpeechUtterance> & Pick<SpeechUtterance, "id">): SpeechUtterance {
+function mockItem(partial: Partial<SpeechUtteranceItem> & Pick<SpeechUtteranceItem, "id">): SpeechUtteranceItem {
   return {
     jobId: "job-1",
     startMs: 0,
     endMs: 1,
     text: "",
     sequence: 0,
-    createdAt: new Date("2020-01-01T00:00:00.000Z"),
+    speakerLabel: null,
     ...partial,
-  } as SpeechUtterance;
+  };
 }
 
 describe("SpeechUtterancePresenter", () => {
   it("maps rows to DTOs", () => {
     const rows = [
-      mockRow({
+      mockItem({
         id: "a",
         startMs: 100,
         endMs: 200,
         text: "hello",
         sequence: 1,
+        speakerLabel: "INTERVIEWER",
       }),
     ];
     const dto = SpeechUtterancePresenter.toDtoList(rows);
@@ -33,8 +34,19 @@ describe("SpeechUtterancePresenter", () => {
         endMs: 200,
         text: "hello",
         sequence: 1,
+        speaker: "INTERVIEWER",
       },
     ]);
+  });
+
+  it("maps null DB speakerLabel to DTO speaker null", () => {
+    const dto = SpeechUtterancePresenter.toDtoList([
+      mockItem({
+        id: "a",
+        speakerLabel: null,
+      }),
+    ]);
+    expect(dto[0]!.speaker).toBeNull();
   });
 
   it("defaultOrderBy is stable", () => {

@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { createWriteStream } from "node:fs";
-import fs from "node:fs/promises";
 import path from "node:path";
-import { pipeline } from "node:stream/promises";
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { AppTransactionRunner } from "../db.js";
+import { ensureInterviewDataLayout } from "../dao/file-store/ensureInterviewDataLayout.js";
+import type { IAppDao } from "../dao/IAppDao.js";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 import { mergeLiveSessionChunksToPlayableWebmBuffer } from "../live-session/remuxConcatenatedWebm.js";
 import {
@@ -26,15 +26,35 @@ type PatchLiveSessionBody = {
   question: string;
 };
 
+type CreateLiveSessionBody = {
+  /** Default true. When false, no Gemini Live WebSocket; post-process uses offline STT only. */
+  liveInterviewerEnabled?: boolean;
+};
+
+function resolveLiveInterviewerEnabledFromBody(body: unknown): boolean {
+  if (!body || typeof body !== "object") {
+    return true;
+  }
+  const v = (body as CreateLiveSessionBody).liveInterviewerEnabled;
+  if (v === false) {
+    return false;
+  }
+  return true;
+}
+
 export class LiveSessionRoutesController {
   constructor(
-    private readonly db: PrismaClient,
+    private readonly db: IAppDao,
+    private readonly runInTransaction: AppTransactionRunner,
     private readonly paths: AppPaths,
+    private readonly files: IAppFileStore,
     private readonly liveSessionPostProcessor: LiveSessionPostProcessor,
   ) {}
 
   register(app: FastifyInstance): void {
-    app.post("/api/live-sessions", (_request, reply) => this.handleCreateSession(reply));
+    app.post<{ Body: CreateLiveSessionBody }>("/api/live-sessions", (request, reply) =>
+      this.handleCreateSession(request, reply),
+    );
     app.get("/api/live-sessions", (_request, reply) => this.handleListSessions(reply));
     app.get<SessionIdParams>("/api/live-sessions/:id/recording.webm", (request, reply) =>
       this.handleGetMergedRecording(request, reply),
@@ -57,14 +77,7 @@ export class LiveSessionRoutesController {
   }
 
   private async handleListSessions(reply: FastifyReply): Promise<void> {
-    const sessions = await this.db.interviewLiveSession.findMany({
-      orderBy: { updatedAt: "desc" },
-      take: 200,
-      include: {
-        _count: { select: { videoChunks: true, codeSnapshots: true } },
-        postProcessJob: { select: { id: true, status: true, errorMessage: true } },
-      },
-    });
+    const sessions = await this.db.listLiveSessions();
 
     return void reply.send(
       sessions.map((s) => ({
@@ -72,28 +85,36 @@ export class LiveSessionRoutesController {
         status: s.status,
         createdAt: s.createdAt.toISOString(),
         updatedAt: s.updatedAt.toISOString(),
-        videoChunkCount: s._count.videoChunks,
-        codeSnapshotCount: s._count.codeSnapshots,
-        questionPreview:
-          s.question && s.question.length > 0 ? s.question.slice(0, 240) : null,
+        videoChunkCount: s.videoChunkCount,
+        codeSnapshotCount: s.codeSnapshotCount,
+        questionPreview: s.questionPreview,
+        liveInterviewerEnabled: s.liveInterviewerEnabled,
         postProcessJob: s.postProcessJob,
       })),
     );
   }
 
-  private async handleCreateSession(reply: FastifyReply): Promise<void> {
-    await this.paths.ensureDataDirs();
+  private async handleCreateSession(
+    request: FastifyRequest<{ Body: CreateLiveSessionBody }>,
+    reply: FastifyReply,
+  ): Promise<void> {
+    await ensureInterviewDataLayout(this.files, this.paths);
     const id = randomUUID();
     const dir = this.paths.liveSessionDir(id);
-    await fs.mkdir(path.join(dir, "video-chunks"), { recursive: true });
+    await this.files.mkdir(path.join(dir, "video-chunks"), { recursive: true });
 
-    await this.db.interviewLiveSession.create({
-      data: { id, status: "ACTIVE" },
+    const liveInterviewerEnabled = resolveLiveInterviewerEnabledFromBody(request.body);
+
+    await this.db.createLiveSession({
+      id,
+      status: "ACTIVE",
+      liveInterviewerEnabled,
     });
 
     return void reply.code(201).send({
       id,
       status: "ACTIVE",
+      liveInterviewerEnabled,
       message:
         "Live session created. POST video chunks to /api/live-sessions/:id/video-chunk and code to /api/live-sessions/:id/code-snapshot.",
     });
@@ -104,13 +125,7 @@ export class LiveSessionRoutesController {
     reply: FastifyReply,
   ): Promise<void> {
     const { id } = request.params;
-    const session = await this.db.interviewLiveSession.findUnique({
-      where: { id },
-      include: {
-        _count: { select: { videoChunks: true, codeSnapshots: true } },
-        postProcessJob: { select: { id: true, status: true, errorMessage: true } },
-      },
-    });
+    const session = await this.db.getLiveSession(id);
     if (!session) {
       return void reply.code(404).send({ error: "Live session not found." });
     }
@@ -119,9 +134,10 @@ export class LiveSessionRoutesController {
       status: session.status,
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
-      videoChunkCount: session._count.videoChunks,
-      codeSnapshotCount: session._count.codeSnapshots,
+      videoChunkCount: session.videoChunkCount,
+      codeSnapshotCount: session.codeSnapshotCount,
       question: session.question,
+      liveInterviewerEnabled: session.liveInterviewerEnabled,
       /** Single playable WebM: per-chunk files are not standalone (only chunk 1 has WebM headers). */
       recordingWebmPath: `/api/live-sessions/${session.id}/recording.webm`,
       /** Interview job (STT + SRT + evaluation) created when the session ends; poll `GET /api/interviews/:id`. */
@@ -138,28 +154,21 @@ export class LiveSessionRoutesController {
     reply: FastifyReply,
   ): Promise<void> {
     const { id } = request.params;
-    const session = await this.db.interviewLiveSession.findUnique({ where: { id } });
-    if (!session) {
+    const exists = await this.db.findLiveSessionIdForTools(id);
+    if (!exists) {
       return void reply.code(404).send({ error: "Live session not found." });
     }
 
-    const chunks = await this.db.liveVideoChunk.findMany({
-      where: { sessionId: id },
-      orderBy: { sequence: "asc" },
-    });
+    const chunks = await this.db.findLiveVideoChunksOrdered(id);
     if (chunks.length === 0) {
       return void reply.code(404).send({ error: "No video chunks for this session." });
     }
 
     const webmPath = path.join(this.paths.liveSessionDir(id), "recording.webm");
-    try {
-      const st = await fs.stat(webmPath);
-      if (st.isFile() && st.size > 0) {
-        await sendWebmFileWithRange(request, reply, webmPath, id);
-        return;
-      }
-    } catch {
-      /* no merged file on disk yet — fall back to on-the-fly merge */
+    const st = await this.files.statOrNull(webmPath);
+    if (st?.isFile && st.size > 0) {
+      await sendWebmFileWithRange(request, reply, webmPath, id);
+      return;
     }
 
     try {
@@ -181,7 +190,7 @@ export class LiveSessionRoutesController {
       return void reply.code(400).send({ error: 'JSON body must include string field "question".' });
     }
 
-    const session = await this.db.interviewLiveSession.findUnique({ where: { id } });
+    const session = await this.db.getLiveSessionPatch(id);
     if (!session) {
       return void reply.code(404).send({ error: "Live session not found." });
     }
@@ -189,10 +198,7 @@ export class LiveSessionRoutesController {
       return void reply.code(410).send({ error: "Live session has ended." });
     }
 
-    await this.db.interviewLiveSession.update({
-      where: { id },
-      data: { question: body.question },
-    });
+    await this.db.updateLiveSessionQuestion(id, body.question);
 
     return void reply.send({
       id,
@@ -218,8 +224,8 @@ export class LiveSessionRoutesController {
     const mime = part.mimetype || "application/octet-stream";
 
     try {
-      const { sequence, sizeBytes } = await this.db.$transaction(async (tx) => {
-        const session = await tx.interviewLiveSession.findUnique({ where: { id } });
+      const { sequence, sizeBytes } = await this.runInTransaction(async (tx) => {
+        const session = await tx.getLiveSessionPatch(id);
         if (!session) {
           throw new SessionError(404, "Live session not found.");
         }
@@ -227,25 +233,20 @@ export class LiveSessionRoutesController {
           throw new SessionError(410, "Live session has ended; video chunks are no longer accepted.");
         }
 
-        const agg = await tx.liveVideoChunk.aggregate({
-          where: { sessionId: id },
-          _max: { sequence: true },
-        });
-        const sequence = (agg._max.sequence ?? 0) + 1;
+        const maxSeq = await tx.aggregateMaxLiveVideoSequence(id);
+        const sequence = maxSeq + 1;
         const storedName = `chunk-${String(sequence).padStart(6, "0")}.webm`;
         const filePath = path.join(this.paths.liveSessionDir(id), "video-chunks", storedName);
 
-        await pipeline(part.file, createWriteStream(filePath));
-        const stat = await fs.stat(filePath);
+        await this.files.writeStreamFromReadable(filePath, part.file);
+        const stat = await this.files.stat(filePath);
 
-        await tx.liveVideoChunk.create({
-          data: {
-            sessionId: id,
-            sequence,
-            filePath,
-            mimeType: mime,
-            sizeBytes: Number(stat.size),
-          },
+        await tx.createLiveVideoChunk({
+          sessionId: id,
+          sequence,
+          filePath,
+          mimeType: mime,
+          sizeBytes: Number(stat.size),
         });
 
         return { sequence, filePath, sizeBytes: Number(stat.size) };
@@ -296,8 +297,8 @@ export class LiveSessionRoutesController {
     }
 
     try {
-      const sequence = await this.db.$transaction(async (tx) => {
-        const session = await tx.interviewLiveSession.findUnique({ where: { id } });
+      const sequence = await this.runInTransaction(async (tx) => {
+        const session = await tx.getLiveSessionPatch(id);
         if (!session) {
           throw new SessionError(404, "Live session not found.");
         }
@@ -305,20 +306,15 @@ export class LiveSessionRoutesController {
           throw new SessionError(410, "Live session has ended; code snapshots are no longer accepted.");
         }
 
-        const agg = await tx.liveCodeSnapshot.aggregate({
-          where: { sessionId: id },
-          _max: { sequence: true },
-        });
-        const sequence = (agg._max.sequence ?? 0) + 1;
+        const maxSeq = await tx.aggregateMaxLiveCodeSnapshotSequence(id);
+        const sequence = maxSeq + 1;
 
-        await tx.liveCodeSnapshot.create({
-          data: {
-            sessionId: id,
-            sequence,
-            code: body.code,
-            offsetSeconds: body.offsetSeconds,
-            capturedAt,
-          },
+        await tx.createLiveCodeSnapshot({
+          sessionId: id,
+          sequence,
+          code: body.code,
+          offsetSeconds: body.offsetSeconds,
+          capturedAt,
         });
         return sequence;
       });
@@ -342,13 +338,13 @@ export class LiveSessionRoutesController {
     reply: FastifyReply,
   ): Promise<void> {
     const { id } = request.params;
-    const session = await this.db.interviewLiveSession.findUnique({ where: { id } });
+    const session = await this.db.getLiveSessionPatch(id);
     if (!session) {
       return void reply.code(404).send({ error: "Live session not found." });
     }
     if (session.status === "ENDED") {
-      const existingJob = await this.db.job.findFirst({ where: { liveSessionId: id } });
-      if (!existingJob) {
+      const existingJobId = await this.db.findFirstJobIdByLiveSessionId(id);
+      if (!existingJobId) {
         this.liveSessionPostProcessor.scheduleAfterEnd(id);
         return void reply.send({
           id,
@@ -360,10 +356,7 @@ export class LiveSessionRoutesController {
       return void reply.send({ id, status: "ENDED", message: "Session was already ended." });
     }
 
-    await this.db.interviewLiveSession.update({
-      where: { id },
-      data: { status: "ENDED" },
-    });
+    await this.db.updateLiveSessionStatus(id, "ENDED");
 
     this.liveSessionPostProcessor.scheduleAfterEnd(id);
 

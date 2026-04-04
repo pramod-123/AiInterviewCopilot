@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import path from "node:path";
+import type { IAppFileStore } from "../../dao/file-store/IAppFileStore.js";
 import type { InterviewEvaluationPayload } from "../../types/interviewEvaluation.js";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 import { transcriptionToSrt } from "../../video-pipeline/transcriptFormatting.js";
@@ -9,6 +9,7 @@ import type { SpeechTranscriptionEvaluationOrchestrator } from "../SpeechTranscr
  * Writes `transcript.srt`, `speech-transcription.json`, and `interview-feedback.json` under an e2e output directory.
  */
 export async function writeE2eSpeechAnalysisArtifacts(
+  files: IAppFileStore,
   outputDir: string,
   jobId: string,
   transcription: SpeechTranscription,
@@ -18,8 +19,8 @@ export async function writeE2eSpeechAnalysisArtifacts(
   const speechJsonPath = path.join(outputDir, "speech-transcription.json");
   const feedbackPath = path.join(outputDir, "interview-feedback.json");
 
-  await fs.writeFile(transcriptSrtPath, transcriptionToSrt(transcription), "utf-8");
-  await fs.writeFile(
+  await files.writeFile(transcriptSrtPath, transcriptionToSrt(transcription), "utf-8");
+  await files.writeFile(
     speechJsonPath,
     JSON.stringify(
       {
@@ -40,7 +41,7 @@ export async function writeE2eSpeechAnalysisArtifacts(
     ),
     "utf-8",
   );
-  await fs.writeFile(
+  await files.writeFile(
     feedbackPath,
     JSON.stringify(
       {
@@ -59,7 +60,10 @@ export async function writeE2eSpeechAnalysisArtifacts(
  * Re-runs Whisper + rubric evaluation on `audio.wav` in an e2e directory and persists the standard artifact files.
  */
 export class E2eDirectorySpeechAnalysisService {
-  constructor(private readonly orchestrator: SpeechTranscriptionEvaluationOrchestrator) {}
+  constructor(
+    private readonly orchestrator: SpeechTranscriptionEvaluationOrchestrator,
+    private readonly files: IAppFileStore,
+  ) {}
 
   /**
    * @param outputDir — folder containing `audio.wav`
@@ -72,15 +76,16 @@ export class E2eDirectorySpeechAnalysisService {
   }> {
     const jobId = `e2e-${path.basename(outputDir)}`;
     const audioWav = path.join(outputDir, "audio.wav");
-    await fs.access(audioWav).catch(() => {
+    const hasAudio = await this.files.pathExists(audioWav);
+    if (!hasAudio) {
       throw new Error(`Missing audio.wav under ${outputDir}`);
-    });
+    }
 
     const { transcription, evaluation } = await this.orchestrator.transcribeAndEvaluate(
       audioWav,
       jobId,
     );
-    await writeE2eSpeechAnalysisArtifacts(outputDir, jobId, transcription, evaluation);
+    await writeE2eSpeechAnalysisArtifacts(this.files, outputDir, jobId, transcription, evaluation);
     return { jobId, transcription, evaluation };
   }
 }

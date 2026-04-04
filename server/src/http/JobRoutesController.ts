@@ -1,10 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { createWriteStream } from "node:fs";
-import fs from "node:fs/promises";
 import path from "node:path";
-import { pipeline } from "node:stream/promises";
 import { randomUUID } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { ensureInterviewDataLayout } from "../dao/file-store/ensureInterviewDataLayout.js";
+import type { IAppDao } from "../dao/IAppDao.js";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 import { CodeSnapshotPresenter } from "../presenters/CodeSnapshotPresenter.js";
 import { SpeechUtterancePresenter } from "../presenters/SpeechUtterancePresenter.js";
@@ -40,8 +39,9 @@ function classifyInterviewVideo(mime: string, filename: string): boolean {
  */
 export class JobRoutesController {
   constructor(
-    private readonly db: PrismaClient,
+    private readonly db: IAppDao,
     private readonly paths: AppPaths,
+    private readonly files: IAppFileStore,
     private readonly videoJobProcessor: VideoJobProcessor,
   ) {}
 
@@ -71,33 +71,26 @@ export class JobRoutesController {
       });
     }
 
-    await this.paths.ensureDataDirs();
+    await ensureInterviewDataLayout(this.files, this.paths);
 
     const id = randomUUID();
     const uploadDir = this.paths.jobUploadDir(id);
-    await fs.mkdir(uploadDir, { recursive: true });
+    await this.files.mkdir(uploadDir, { recursive: true });
 
     const safeBase = path.basename(filename || "video").replace(/[^\w.\-()+ ]/g, "_");
     const storedName = safeBase || "video.bin";
     const filePath = path.join(uploadDir, storedName);
 
-    await pipeline(part.file, createWriteStream(filePath));
+    await this.files.writeStreamFromReadable(filePath, part.file);
 
-    const stat = await fs.stat(filePath);
+    const stat = await this.files.stat(filePath);
 
-    await this.db.job.create({
-      data: {
-        id,
-        status: "PENDING",
-        interviewVideo: {
-          create: {
-            filePath,
-            originalFilename: part.filename || storedName,
-            mimeType: mime,
-            sizeBytes: Number(stat.size),
-          },
-        },
-      },
+    await this.db.createJobPendingWithInterviewVideo({
+      id,
+      filePath,
+      originalFilename: part.filename || storedName,
+      mimeType: mime,
+      sizeBytes: Number(stat.size),
     });
 
     void this.videoJobProcessor.process(id).catch((err: unknown) => {
@@ -118,16 +111,7 @@ export class JobRoutesController {
   ): Promise<void> {
     const { id } = request.params;
 
-    const job = await this.db.job.findUnique({
-      where: { id },
-      include: {
-        result: true,
-        interviewVideo: true,
-        speechUtterances: { orderBy: SpeechUtterancePresenter.defaultOrderBy },
-        codeSnapshots: { orderBy: CodeSnapshotPresenter.defaultOrderBy },
-        liveSession: { select: { id: true } },
-      },
-    });
+    const job = await this.db.findJobDetail(id);
 
     if (!job) {
       return void reply.code(404).send({ error: "Interview not found." });

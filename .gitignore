@@ -15,6 +15,9 @@ server/data/
 server/media/*
 !server/media/.gitkeep
 
+# Synthetic interview fixture output (regenerate with npm run fixture:video:longest-substring)
+server/fixtures/synthetic/generated/
+
 # Local sample video for API/pipeline tests (not distributed)
 media/Interview.mov
 media/interview.mov

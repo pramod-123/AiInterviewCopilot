@@ -68,13 +68,29 @@
                   not mixed into the file in this version. Uncheck for tab-only audio.</span
                 >
               </label>
+              <label class="mic-setting">
+                <input type="checkbox" id="chkVoiceAi" checked />
+                <span
+                  ><strong>Voice AI interviewer</strong> — Live Gemini voice while recording (requires mic and server
+                  <code>GEMINI_API_KEY</code> + <code>GEMINI_LIVE_MODEL</code>).</span
+                >
+              </label>
             </div>
 
             <div id="sideHelpPanel" class="sp-panel-toggle hidden" role="region" aria-label="Help">
               <p>
-                Open the toolbar popup → <strong>Start interview</strong> on a LeetCode problem tab. That opens this panel
-                with a live session. If the mic prompt fails here, allow the microphone from the popup first or in
+                Open the toolbar popup → <strong>Start interview</strong> on a LeetCode problem tab. Uncheck
+                <strong>Live voice interviewer</strong> there to record without Gemini Live; the transcript is built
+                offline when you end the session.
+              </p>
+              <p>
+                If the mic prompt fails here, allow the microphone from the popup first or in
                 <code>chrome://settings/content/microphone</code> for this extension.
+              </p>
+              <p>
+                With <strong>Voice AI interviewer</strong> on, your server must expose the Gemini Live WebSocket (set
+                <code>GEMINI_API_KEY</code> and <code>GEMINI_LIVE_MODEL</code> in <code>server/.env</code> and restart).
+                The problem text is sent to the server before the voice link starts.
               </p>
             </div>
 
@@ -101,6 +117,15 @@
                     <span class="capture-label">Audio</span>
                   </div>
                   <span class="capture-status idle" id="micCaptureStatus">Ready</span>
+                </div>
+                <div class="capture-row">
+                  <div class="capture-row-left">
+                    <div class="capture-icon">
+                      <span class="material-symbols-outlined" aria-hidden="true">record_voice_over</span>
+                    </div>
+                    <span class="capture-label">Voice AI</span>
+                  </div>
+                  <span class="capture-status idle" id="voiceAiStatus">—</span>
                 </div>
               </div>
             </div>
@@ -137,6 +162,7 @@
 
     <script src="markdownRender.js"></script>
     <script src="resultView.js"></script>
+    <script src="geminiLiveBridge.js"></script>
     <script src="recorder.js"></script>
   </body>
 </html>

@@ -375,6 +375,86 @@ async function loadSessionQuestion(sessionId) {
 }
 
 /**
+ * When the sessions list was loaded before post-process finished, `data-job-id` on the row is empty.
+ * Session detail always includes current {@link postProcessJob} — use it so the detail pane can load results
+ * without forcing the user to reload the list and click again.
+ * @param {string} sessionId
+ * @returns {Promise<string>} job id or ""
+ */
+async function resolvePostProcessJobIdFromSession(sessionId) {
+  const base = apiBase();
+  try {
+    const res = await fetch(`${base}/api/live-sessions/${encodeURIComponent(sessionId)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data || typeof data !== "object") {
+      return "";
+    }
+    const pp = data.postProcessJob;
+    if (pp && typeof pp === "object" && typeof pp.id === "string") {
+      return pp.id.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+/**
+ * @param {string} sessionId
+ * @param {string} jobId
+ */
+function syncListRowPostProcessJob(sessionId, jobId) {
+  if (!sessionList || !jobId) {
+    return;
+  }
+  const esc =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(sessionId) : sessionId;
+  const row = sessionList.querySelector(`button.sess-session-item[data-session-id="${esc}"]`);
+  if (!(row instanceof HTMLElement)) {
+    return;
+  }
+  row.dataset.jobId = jobId;
+  const label = row.querySelector(".sess-job-label");
+  if (label) {
+    label.textContent = "Has result";
+  }
+}
+
+/**
+ * @param {unknown} v — API `speaker` field
+ * @returns {string | null} trimmed label or null if absent
+ */
+function normalizeTranscriptSpeaker(v) {
+  if (typeof v !== "string") {
+    return null;
+  }
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
+
+/**
+ * @param {string | null | undefined} raw
+ * @returns {string} display text (empty if null — caller uses "—" for unknown)
+ */
+function transcriptSpeakerLabel(raw) {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return "";
+  }
+  const u = raw.trim().toUpperCase();
+  if (u === "INTERVIEWER") {
+    return "Interviewer";
+  }
+  if (u === "INTERVIEWEE") {
+    return "Interviewee";
+  }
+  if (/^SPEAKER_\d+$/i.test(raw.trim())) {
+    const n = raw.trim().replace(/^SPEAKER_/i, "");
+    return `Speaker ${Number.parseInt(n, 10) + 1}`;
+  }
+  return raw.trim();
+}
+
+/**
  * @param {unknown} transcripts
  * @param {unknown} resultPayload
  * @param {string} fallbackBadge
@@ -402,9 +482,6 @@ function renderTranscriptPanel(transcripts, resultPayload, fallbackBadge) {
       }
     }
   }
-  if (transcriptBadge) {
-    transcriptBadge.textContent = parts.length > 0 ? parts.join(" · ") : fallbackBadge;
-  }
 
   const list = Array.isArray(transcripts) ? transcripts : [];
   const audio = list.filter(
@@ -412,14 +489,38 @@ function renderTranscriptPanel(transcripts, resultPayload, fallbackBadge) {
   );
   const use = audio.length > 0 ? audio : list;
 
+  const speakerKeys = new Set();
   for (const seg of use) {
     if (!seg || typeof seg !== "object") {
       continue;
     }
-    const s = /** @type {{ startMs?: number; endMs?: number; text?: string }} */ (seg);
+    const row = /** @type {Record<string, unknown>} */ (seg);
+    const sp = normalizeTranscriptSpeaker(row.speaker);
+    if (sp) {
+      speakerKeys.add(sp);
+    }
+  }
+  if (speakerKeys.size > 0) {
+    parts.push(
+      speakerKeys.size === 1 ? `1 speaker label` : `${speakerKeys.size} speaker labels`,
+    );
+  } else if (use.length > 0) {
+    parts.push("No speaker diarization");
+  }
+
+  if (transcriptBadge) {
+    transcriptBadge.textContent = parts.length > 0 ? parts.join(" · ") : fallbackBadge;
+  }
+
+  for (const seg of use) {
+    if (!seg || typeof seg !== "object") {
+      continue;
+    }
+    const s = /** @type {{ startMs?: number; endMs?: number; text?: string; speaker?: unknown }} */ (seg);
     const startMs = typeof s.startMs === "number" ? s.startMs : 0;
     const endMs = typeof s.endMs === "number" ? s.endMs : startMs;
     const startSec = startMs / 1000;
+    const rawSpeaker = normalizeTranscriptSpeaker(s.speaker);
     const p = document.createElement("p");
     p.className = "sess-trans-line";
     p.dataset.startMs = String(startMs);
@@ -428,7 +529,20 @@ function renderTranscriptPanel(transcripts, resultPayload, fallbackBadge) {
     ts.className = "ts";
     ts.textContent = `${formatTranscriptTs(startSec)}`;
     p.appendChild(ts);
-    p.appendChild(document.createTextNode(` — "${s.text || ""}"`));
+    const spEl = document.createElement("span");
+    spEl.className = "sess-trans-speaker";
+    if (rawSpeaker) {
+      const key = rawSpeaker.toUpperCase().replace(/\s+/g, "_");
+      spEl.dataset.speakerKey = key;
+      const pretty = transcriptSpeakerLabel(rawSpeaker);
+      spEl.textContent = `${pretty || rawSpeaker}:`;
+    } else {
+      spEl.classList.add("sess-trans-speaker--unknown");
+      spEl.textContent = "\u2014";
+      spEl.title = "No diarized speaker (enable diarization in post-process or check pipeline.diarization in result JSON)";
+    }
+    p.appendChild(spEl);
+    p.appendChild(document.createTextNode(` \u2014 "${s.text || ""}"`));
     transcriptLines.appendChild(p);
   }
 
@@ -590,6 +704,7 @@ function renderSessionList(sessions) {
       typeof row.videoChunkCount === "number" && Number.isFinite(row.videoChunkCount)
         ? row.videoChunkCount
         : 0;
+    const liveIv = row.liveInterviewerEnabled !== false;
 
     const titleText = preview || truncate(id, 36) || "Session";
     const btn = document.createElement("button");
@@ -622,12 +737,20 @@ function renderSessionList(sessions) {
     ic.textContent = "timer";
     ic.setAttribute("aria-hidden", "true");
     const jobLabel = document.createElement("span");
+    jobLabel.className = "sess-job-label";
     jobLabel.textContent = jobId ? "Has result" : "—";
     spanDur.appendChild(ic);
     spanDur.appendChild(jobLabel);
 
     meta.appendChild(spanD);
     meta.appendChild(spanDur);
+    if (!liveIv) {
+      const off = document.createElement("span");
+      off.className = "sess-offline-stt";
+      off.textContent = "Offline STT";
+      off.title = "No live Gemini interviewer; transcript after session end";
+      meta.appendChild(off);
+    }
     btn.appendChild(h);
     btn.appendChild(meta);
 
@@ -780,7 +903,20 @@ async function selectSession(sessionId, jobId, videoChunkCount, preview, updated
 
   detailPanel.replaceChildren();
 
-  if (!jobId) {
+  let effectiveJobId = typeof jobId === "string" ? jobId.trim() : "";
+  if (!effectiveJobId) {
+    const p = document.createElement("p");
+    p.className = "detail-muted";
+    p.textContent = "Checking for post-process job…";
+    detailPanel.appendChild(p);
+    effectiveJobId = await resolvePostProcessJobIdFromSession(sessionId);
+    detailPanel.replaceChildren();
+    if (effectiveJobId) {
+      syncListRowPostProcessJob(sessionId, effectiveJobId);
+    }
+  }
+
+  if (!effectiveJobId) {
     const p = document.createElement("p");
     p.className = "detail-muted";
     p.textContent =
@@ -795,7 +931,7 @@ async function selectSession(sessionId, jobId, videoChunkCount, preview, updated
 
   const base = apiBase();
   try {
-    const res = await fetch(`${base}/api/interviews/${jobId}`);
+    const res = await fetch(`${base}/api/interviews/${effectiveJobId}`);
     const body = await res.json().catch(() => ({}));
     const transcripts = Array.isArray(body.speechTranscript)
       ? body.speechTranscript

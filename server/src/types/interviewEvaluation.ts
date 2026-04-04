@@ -76,6 +76,11 @@ export type InterviewEvaluationPayload = {
   tokenUsage?: EvaluationTokenUsage;
 };
 
+/** Rubric evaluation call: job id only; evaluators load utterances, code snapshots, and session data from the DB. */
+export type InterviewEvaluationRequest = {
+  jobId: string;
+};
+
 /** Input built from timed transcript segments (audio STT) and optional editor OCR (video jobs). */
 export type InterviewEvaluationInput = {
   jobId: string;
@@ -84,7 +89,7 @@ export type InterviewEvaluationInput = {
   fullTranscriptText: string;
   /**
    * Pretty-printed JSON array: `{ start, end, speech, frameData }[]` (ms timeline + progressive OCR per interval).
-   * Set by {@link SpeechTranscriptionEvaluationOrchestrator.transcribeAndEvaluate} before evaluation.
+   * Filled when assembling evaluation input from persisted job rows (orchestrator persists, then evaluator loads).
    */
   interviewTimelineJson?: string;
   /**

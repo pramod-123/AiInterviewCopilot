@@ -1,15 +1,18 @@
 /**
  * Delete live-session post-process Job + DB cascades and wipe `post-process/` + merged recording files.
- * Does not remove chunks or code snapshots.
+ * Sets session status to ACTIVE (so you can POST …/end again). Does not remove chunks or code snapshots.
  *
  * Usage (from `server/`): npx tsx scripts/reset-live-session-post-process.ts <liveSessionId>
+ *
+ * Synthetic seeded session: a0000001-0001-4000-8001-000000000001
  */
 import "dotenv/config";
 import pino from "pino";
 import type { FastifyBaseLogger } from "fastify";
-import { prisma } from "../src/db.js";
+import { appDao, closeAppDatabase, openAppDatabase } from "../src/db.js";
+import { appFileStore } from "../src/appFileStore.js";
 import { AppPaths } from "../src/infrastructure/AppPaths.js";
-import { resetLiveSessionPostProcess } from "../src/live-session/resetLiveSessionPostProcess.js";
+import { LiveSessionPostProcessReset } from "../src/live-session/LiveSessionPostProcessReset.js";
 
 const sessionId = process.argv[2]?.trim();
 if (!sessionId) {
@@ -19,20 +22,18 @@ if (!sessionId) {
 
 const log = pino({ level: "info" }) as unknown as FastifyBaseLogger;
 
-await prisma.$connect();
-await prisma.$queryRawUnsafe("PRAGMA busy_timeout = 30000");
+await openAppDatabase();
 
-const session = await prisma.interviewLiveSession.findUnique({
-  where: { id: sessionId },
-  select: { id: true },
-});
+const session = await appDao.findLiveSessionIdForTools(sessionId);
 if (!session) {
   console.error(`No InterviewLiveSession with id ${sessionId}`);
-  await prisma.$disconnect();
+  await closeAppDatabase();
   process.exit(1);
 }
 
 const paths = new AppPaths();
-const { removedJobCount } = await resetLiveSessionPostProcess(prisma, paths, sessionId);
+const { removedJobCount } = await new LiveSessionPostProcessReset(appDao, paths, appFileStore).reset(
+  sessionId,
+);
 log.info({ sessionId, removedJobCount }, "Live session post-process reset (DB + artifacts)");
-await prisma.$disconnect();
+await closeAppDatabase();

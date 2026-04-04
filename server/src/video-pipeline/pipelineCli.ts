@@ -14,6 +14,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { appFileStore } from "../appFileStore.js";
 import {
   E2eDirectorySpeechAnalysisService,
   writeE2eSpeechAnalysisArtifacts,
@@ -21,7 +22,7 @@ import {
 import { SpeechTranscriptionEvaluationOrchestratorFactory } from "../services/SpeechTranscriptionEvaluationOrchestratorFactory.js";
 import { FfmpegDedupedFrameExtractor } from "../services/video/FfmpegDedupedFrameExtractor.js";
 import { assertMandatoryVisionRoi } from "../services/mandatoryInterviewApiEnv.js";
-import { LlmClientFactory } from "../services/llm/LlmClientFactory.js";
+import { OpenAiLlmClient } from "../services/llm/OpenAiLlmClient.js";
 import { E2eInterviewPipeline } from "./E2eInterviewPipeline.js";
 import { EditorRoiDetectionService } from "./editorRoiDetection.js";
 import { FfmpegRunner } from "./ffmpegExtract.js";
@@ -136,10 +137,11 @@ export async function runE2ePipelineCli(argv: string[]): Promise<void> {
   }
 
   const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
-  const visionOpenAiLlm = LlmClientFactory.tryCreate("openai", process.env);
+  const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
   assertMandatoryVisionRoi(visionOpenAiLlm);
   const roiDetection = new EditorRoiDetectionService(visionOpenAiLlm);
   const pipeline = new E2eInterviewPipeline(new FfmpegRunner(), new TesseractRunner(), {
+    files: appFileStore,
     roiDetection,
     dedupedFrames: new FfmpegDedupedFrameExtractor(),
     speechAnalysis,
@@ -230,7 +232,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
     `run-${new Date().toISOString().replace(/[:.]/g, "-")}`,
   );
 
-  await fsPromises.mkdir(outDir, { recursive: true });
+  await appFileStore.mkdir(outDir, { recursive: true });
   const firstFramePng = path.join(outDir, "first-frame.png");
   const ffmpeg = new FfmpegRunner();
   const durArgs =
@@ -238,7 +240,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
       ? (["-t", String(maxInputDurationSec)] as const)
       : ([] as const);
 
-  const visionOpenAiLlm = LlmClientFactory.tryCreate("openai", process.env);
+  const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
   assertMandatoryVisionRoi(visionOpenAiLlm);
   const roiService = new EditorRoiDetectionService(visionOpenAiLlm);
   await ffmpeg.exec([
@@ -265,7 +267,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
   const extractedProblemStatement = roiResult.problemStatement;
   if (extractedProblemStatement) {
     console.log("Problem (from screen):", extractedProblemStatement);
-    await fsPromises.writeFile(
+    await appFileStore.writeFile(
       path.join(outDir, "problem-statement-extracted.txt"),
       extractedProblemStatement,
       "utf-8",
@@ -281,7 +283,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
     maxInputDurationSec != null ? `${maxInputDurationSec}s` : "(full file)",
   );
 
-  const pipeline = new VideoProcessingPipeline(inputPath, outDir, ffmpeg, crop, {
+  const pipeline = new VideoProcessingPipeline(appFileStore, inputPath, outDir, ffmpeg, crop, {
     ...(extractFps != null ? { extractFps } : {}),
     ...(maxInputDurationSec != null ? { maxInputDurationSec } : {}),
   });
@@ -311,7 +313,7 @@ export async function runVideoPipelineCli(argv: string[]): Promise<void> {
   };
 
   const summaryPath = path.join(outDir, "pipeline-summary.json");
-  await fsPromises.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf-8");
+  await appFileStore.writeFile(summaryPath, JSON.stringify(summary, null, 2), "utf-8");
 
   console.log("\nDone.");
   console.log("Frames extracted:", artifacts.frameCount);
@@ -357,7 +359,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
   const jobId = `e2e-${path.basename(outDir)}`;
   const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
   const { transcription, evaluation } = await speechAnalysis.transcribeAndEvaluate(audioWav, jobId);
-  await writeE2eSpeechAnalysisArtifacts(outDir, jobId, transcription, evaluation);
+  await writeE2eSpeechAnalysisArtifacts(appFileStore, outDir, jobId, transcription, evaluation);
 
   const alignN = Math.min(times.length, ocrTexts.length);
   const ocrAligned = ocrTexts.slice(0, alignN);
@@ -372,7 +374,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
     times.slice(0, alignN),
     ocrAligned,
   );
-  await fsPromises.writeFile(finalTranscriptPath, JSON.stringify(finalTranscript, null, 2), "utf-8");
+  await appFileStore.writeFile(finalTranscriptPath, JSON.stringify(finalTranscript, null, 2), "utf-8");
 
   let problemStatementText: string | null;
   try {
@@ -402,9 +404,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
         speechTranscriptionJson: path.join(outDir, "speech-transcription.json"),
         interviewFeedback: path.join(outDir, "interview-feedback.json"),
         finalTranscript: finalTranscriptPath,
-        problemStatement: (await fsPromises.stat(problemPath).catch(() => null))
-          ? problemPath
-          : null,
+        problemStatement: (await appFileStore.statOrNull(problemPath)) ? problemPath : null,
       },
       frameStats: {
         manifestFrameCount: manifest.length,
@@ -422,7 +422,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
     alignedTimeline: aligned,
   };
 
-  await fsPromises.writeFile(resultJsonPath, JSON.stringify(result, null, 2), "utf-8");
+  await appFileStore.writeFile(resultJsonPath, JSON.stringify(result, null, 2), "utf-8");
   console.log("Wrote:", transcriptSrtPath);
   console.log("Wrote:", path.join(outDir, "interview-feedback.json"));
   console.log("Wrote:", finalTranscriptPath);
@@ -439,7 +439,7 @@ export async function sttEvalE2eCli(argv: string[]): Promise<void> {
   }
 
   const orchestrator = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
-  const svc = new E2eDirectorySpeechAnalysisService(orchestrator);
+  const svc = new E2eDirectorySpeechAnalysisService(orchestrator, appFileStore);
 
   console.error("[stt+eval] Transcribing audio.wav (chunked if large)…");
   const { jobId, transcription, evaluation } = await svc.analyzeFromExistingWav(outDir);

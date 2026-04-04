@@ -1,4 +1,4 @@
-import { LlmClientFactory } from "../llm/LlmClientFactory.js";
+import { OpenAiLlmClient } from "../llm/OpenAiLlmClient.js";
 import type { ISpeechToTextService } from "./ISpeechToTextService.js";
 import { LocalWhisperSpeechToTextService } from "./LocalWhisperSpeechToTextService.js";
 import { LlmClientSpeechToTextService } from "./LlmClientSpeechToTextService.js";
@@ -28,7 +28,7 @@ export class SpeechToTextServiceFactory {
       return LocalWhisperSpeechToTextService.tryCreate(this.env);
     }
     if (mode === "remote") {
-      const llm = LlmClientFactory.tryCreate("openai", this.env);
+      const llm = OpenAiLlmClient.tryCreate(this.env);
       if (!llm) {
         return null;
       }

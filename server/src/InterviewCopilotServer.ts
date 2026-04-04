@@ -1,18 +1,21 @@
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
-import { prisma } from "./db.js";
+import { appDao, runAppTransaction } from "./db.js";
+import { appFileStore } from "./appFileStore.js";
 import { JobRoutesController } from "./http/JobRoutesController.js";
 import { LiveSessionRoutesController } from "./http/LiveSessionRoutesController.js";
 import { AppPaths } from "./infrastructure/AppPaths.js";
 import { assertMandatoryInterviewApiConfig } from "./services/mandatoryInterviewApiEnv.js";
 import { InterviewEvaluationServiceFactory } from "./services/evaluation/InterviewEvaluationServiceFactory.js";
-import { LlmClientFactory } from "./services/llm/LlmClientFactory.js";
+import { OpenAiLlmClient } from "./services/llm/OpenAiLlmClient.js";
 import { SpeechTranscriptionEvaluationOrchestratorFactory } from "./services/SpeechTranscriptionEvaluationOrchestratorFactory.js";
 import { SpeechToTextServiceFactory } from "./services/speech-to-text/SpeechToTextServiceFactory.js";
 import { LiveSessionPostProcessor } from "./services/LiveSessionPostProcessor.js";
 import { VideoJobProcessor } from "./services/VideoJobProcessor.js";
+import { GeminiLiveWebSocketPlugin } from "./http/GeminiLiveWebSocketPlugin.js";
 import { EditorRoiDetectionService } from "./video-pipeline/editorRoiDetection.js";
+import { SrtGeneratorFactory } from "./services/srt-generator/SrtGeneratorFactory.js";
 
 /**
  * Composes Fastify plugins and route controllers for the local interview API.
@@ -30,7 +33,8 @@ export class InterviewCopilotServer {
     this.app = Fastify({ logger: true });
     this.paths = new AppPaths();
     this.speechToTextFactory = speechToTextFactory ?? new SpeechToTextServiceFactory();
-    this.evaluationFactory = evaluationFactory ?? new InterviewEvaluationServiceFactory();
+    this.evaluationFactory =
+      evaluationFactory ?? new InterviewEvaluationServiceFactory(process.env, appDao);
   }
 
   get instance(): FastifyInstance {
@@ -64,32 +68,55 @@ export class InterviewCopilotServer {
       this.evaluationFactory,
       this.app.log,
     ).tryCreate();
-    const visionOpenAiLlm = LlmClientFactory.tryCreate("openai", process.env);
+    const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
     // ffmpeg/ffprobe/tesseract, STT + eval, vision ROI — fail before accepting uploads.
     assertMandatoryInterviewApiConfig(speechAnalysis, visionOpenAiLlm);
     const roiDetection = new EditorRoiDetectionService(visionOpenAiLlm!);
     const videoProcessor = new VideoJobProcessor(
-      prisma,
+      appDao,
+      runAppTransaction,
       this.paths,
+      appFileStore,
       speechAnalysis,
       this.app.log,
       roiDetection,
     );
     const liveSessionPostProcessor = new LiveSessionPostProcessor(
-      prisma,
+      appDao,
+      runAppTransaction,
       this.paths,
+      appFileStore,
       speechAnalysis,
       this.app.log,
+      new SrtGeneratorFactory(this.paths, this.app.log).create(),
     );
     const liveSessionRoutes = new LiveSessionRoutesController(
-      prisma,
+      appDao,
+      runAppTransaction,
       this.paths,
+      appFileStore,
       liveSessionPostProcessor,
     );
     liveSessionRoutes.register(this.app);
 
-    const jobRoutes = new JobRoutesController(prisma, this.paths, videoProcessor);
+    const jobRoutes = new JobRoutesController(appDao, this.paths, appFileStore, videoProcessor);
     jobRoutes.register(this.app);
+  }
+
+  /**
+   * Gemini Live API bridge — WebSocket `/api/live-sessions/:id/realtime`.
+   * Skipped unless both `GEMINI_API_KEY` and `GEMINI_LIVE_MODEL` are set.
+   */
+  async registerGeminiLiveWebSocket(): Promise<void> {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    const model = process.env.GEMINI_LIVE_MODEL?.trim();
+    if (!apiKey || !model) {
+      this.app.log.info(
+        "Gemini Live WebSocket not registered — set GEMINI_API_KEY and GEMINI_LIVE_MODEL to enable voice interviewer.",
+      );
+      return;
+    }
+    await new GeminiLiveWebSocketPlugin(appDao, this.paths).register(this.app);
   }
 
   async listen(port: number, host: string): Promise<void> {

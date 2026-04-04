@@ -1,4 +1,6 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { AppTransactionRunner } from "../db.js";
+import type { IAppDao } from "../dao/IAppDao.js";
+import type { SpeechUtteranceInsert } from "../dao/dto.js";
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
 import { SpeechSegment, SpeechTranscription } from "../types/speechTranscription.js";
 import type { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscriptionEvaluationOrchestrator.js";
@@ -13,7 +15,8 @@ import type { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscri
  */
 export class AudioJobProcessor {
   constructor(
-    private readonly db: PrismaClient,
+    private readonly db: IAppDao,
+    private readonly runInTransaction: AppTransactionRunner,
     private readonly speechAnalysis: SpeechTranscriptionEvaluationOrchestrator | null,
   ) {}
 
@@ -30,20 +33,14 @@ export class AudioJobProcessor {
       return;
     }
 
-    const job = await this.db.job.findUnique({
-      where: { id: jobId },
-      include: { interviewAudio: true },
-    });
+    const job = await this.db.findJobWithInterviewAudio(jobId);
 
     if (!job?.interviewAudio) {
       await this.failJob(jobId, "No interview audio found for this job.");
       return;
     }
 
-    await this.db.job.update({
-      where: { id: jobId },
-      data: { status: "PROCESSING", errorMessage: null },
-    });
+    await this.db.updateJob(jobId, { status: "PROCESSING", errorMessage: null });
 
     const audioMeta = job.interviewAudio;
 
@@ -66,10 +63,7 @@ export class AudioJobProcessor {
   }
 
   private async failJob(jobId: string, errorMessage: string): Promise<void> {
-    await this.db.job.update({
-      where: { id: jobId },
-      data: { status: "FAILED", errorMessage },
-    });
+    await this.db.updateJob(jobId, { status: "FAILED", errorMessage });
   }
 
   private async persistSuccessfulTranscription(
@@ -84,40 +78,25 @@ export class AudioJobProcessor {
 
     const payload = this.buildResultPayload(transcription, segments.length, evaluation);
 
-    await this.db.$transaction(async (tx) => {
-      await tx.speechUtterance.deleteMany({
-        where: { jobId },
-      });
+    await this.runInTransaction(async (tx) => {
+      await tx.deleteSpeechUtterancesByJobId(jobId);
 
       if (segmentRows.length > 0) {
-        await tx.speechUtterance.createMany({ data: segmentRows });
+        await tx.createSpeechUtterances(segmentRows);
       }
 
-      await tx.interviewAudio.update({
-        where: { jobId },
-        data: {
-          durationSeconds: durationSec > 0 ? durationSec : previousDuration,
-        },
-      });
+      await tx.updateInterviewAudioDuration(
+        jobId,
+        durationSec > 0 ? durationSec : previousDuration,
+      );
 
-      await tx.result.upsert({
-        where: { jobId },
-        create: { jobId, payload },
-        update: { payload },
-      });
+      await tx.upsertResultPayload(jobId, payload);
 
-      await tx.job.update({
-        where: { id: jobId },
-        data: { status: "COMPLETED", errorMessage: null },
-      });
+      await tx.updateJob(jobId, { status: "COMPLETED", errorMessage: null });
     });
   }
 
-  private toSegmentRow(
-    jobId: string,
-    seg: SpeechSegment,
-    sequence: number,
-  ): Prisma.SpeechUtteranceCreateManyInput {
+  private toSegmentRow(jobId: string, seg: SpeechSegment, sequence: number): SpeechUtteranceInsert {
     const startMs = Math.max(0, Math.round(seg.startSec * 1000));
     let endMs = Math.max(0, Math.round(seg.endSec * 1000));
     if (endMs <= startMs) {
@@ -136,7 +115,7 @@ export class AudioJobProcessor {
     transcription: SpeechTranscription,
     segmentCount: number,
     evaluation: InterviewEvaluationPayload,
-  ): Prisma.InputJsonValue {
+  ) {
     return {
       stt: {
         provider: transcription.providerId,

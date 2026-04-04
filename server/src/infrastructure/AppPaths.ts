@@ -1,4 +1,3 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,10 +24,5 @@ export class AppPaths {
 
   liveSessionDir(sessionId: string): string {
     return path.join(this.liveSessionsDir, sessionId);
-  }
-
-  async ensureDataDirs(): Promise<void> {
-    await fs.mkdir(this.uploadsDir, { recursive: true });
-    await fs.mkdir(this.liveSessionsDir, { recursive: true });
   }
 }

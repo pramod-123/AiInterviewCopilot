@@ -7,6 +7,8 @@
   },
   "scripts": {
     "postinstall": "prisma generate",
+    "predev": "prisma generate",
+    "prestart": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:reset": "rm -f data/app.db data/app.db-wal data/app.db-shm && rm -rf data/live-sessions && prisma db push",
@@ -25,18 +27,31 @@
     "pipeline:e2e:finish": "tsx src/video-pipeline/pipelineCli.ts finish-e2e",
     "test:api:mov": "bash scripts/post-interview-mov.sh",
     "live-session:reset-post-process": "tsx scripts/reset-live-session-post-process.ts",
-    "live-session:reprocess": "tsx scripts/reprocess-live-session.ts"
+    "live-session:reprocess": "tsx scripts/reprocess-live-session.ts",
+    "fixture:video:longest-substring": "tsx scripts/generate-synthetic-interview-video.ts",
+    "db:seed:synthetic-live-session": "tsx scripts/seed-synthetic-live-session.ts",
+    "test:agent-tools": "tsx scripts/test-agent-tools.ts",
+    "test:single-agent-evaluator": "tsx scripts/test-single-agent-evaluator.ts",
+    "compare-evaluators": "tsx scripts/compare-evaluators.ts"
   },
   "dependencies": {
+    "@langchain/anthropic": "^0.3.15",
+    "@langchain/core": "^0.3.40",
+    "@langchain/openai": "^0.3.17",
     "@fastify/cors": "^10.0.1",
     "@fastify/multipart": "^9.0.1",
+    "@fastify/websocket": "^11.2.0",
+    "@google/genai": "^1.48.0",
     "@libsql/client": "^0.17.2",
     "@prisma/adapter-libsql": "^7.6.0",
     "@prisma/client": "^7.6.0",
+    "diff": "^8.0.4",
+    "langchain": "^0.3.19",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "openai": "^4.85.4",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

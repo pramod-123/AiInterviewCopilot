@@ -1,15 +1,15 @@
-import type { CodeSnapshot } from "@prisma/client";
+import type { CodeSnapshotItem, CodeSnapshotSource } from "../dao/dto.js";
 
 export type CodeSnapshotDto = {
   id: string;
-  source: CodeSnapshot["source"];
+  source: CodeSnapshotSource;
   offsetMs: number;
   text: string;
   sequence: number;
 };
 
 /**
- * Maps persisted {@link CodeSnapshot} rows (OCR / editor captures) to API responses.
+ * Maps persisted code snapshot rows (OCR / editor captures) to API responses.
  */
 export class CodeSnapshotPresenter {
   static readonly defaultOrderBy = [
@@ -17,7 +17,7 @@ export class CodeSnapshotPresenter {
     { offsetMs: "asc" as const },
   ];
 
-  static toDtoList(rows: CodeSnapshot[]): CodeSnapshotDto[] {
+  static toDtoList(rows: CodeSnapshotItem[]): CodeSnapshotDto[] {
     return rows.map((r) => ({
       id: r.id,
       source: r.source,

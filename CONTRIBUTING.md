@@ -16,7 +16,7 @@ npx prisma db push
 
 ### Browser extension
 
-There is no npm build for **`browser-extension/`** (plain HTML/CSS/JS). Load it in Chrome: **Extensions** → **Developer mode** → **Load unpacked** → choose the **`browser-extension`** directory. Point the popup’s **API base URL** at your running server (default `http://127.0.0.1:3001`). Use a **`https://leetcode.com/problems/...`** tab when exercising capture.
+There is no npm build for **`browser-extension/chrome/`** (plain HTML/CSS/JS). Load it in Chrome: **Extensions** → **Developer mode** → **Load unpacked** → choose **`browser-extension/chrome`**. Point the popup’s **API base URL** at your running server (default `http://127.0.0.1:3001`). Use a **`https://leetcode.com/problems/...`** tab when exercising capture.
 
 ## Before opening a PR
 
@@ -29,7 +29,7 @@ npm test
 npm run build
 ```
 
-Manually smoke the extension (start interview → side panel recording → end session → **Sessions** page: video, transcript, evaluation) when you touch **`browser-extension/`** or live-session server code.
+Manually smoke the extension (start interview → side panel recording → end session → **Sessions** page: video, transcript, evaluation) when you touch **`browser-extension/chrome/`** (or live-session server code).
 
 ## Tests
 

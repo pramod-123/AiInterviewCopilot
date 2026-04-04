@@ -1,14 +1,9 @@
+import type { IAppDao } from "../dao/IAppDao.js";
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
 import type { SpeechTranscription } from "../types/speechTranscription.js";
 import type { InterviewEvaluator } from "./evaluation/InterviewEvaluationService.js";
-import { transcriptionToEvaluationInput } from "./evaluation/transcriptionToEvaluationInput.js";
+import { persistJobEvaluationArtifacts } from "./evaluation/persistJobEvaluationArtifacts.js";
 import type { ISpeechToTextService } from "./speech-to-text/ISpeechToTextService.js";
-import {
-  applyCarryForwardEditorSnapshots,
-  buildFinalTranscriptJson,
-  finalTranscriptToEvaluationTimeline,
-  stringifyInterviewTimelineForEvaluation,
-} from "../video-pipeline/transcriptFormatting.js";
 
 export type TranscribeAndEvaluateOptions = {
   problemStatementText?: string;
@@ -30,7 +25,43 @@ export class SpeechTranscriptionEvaluationOrchestrator {
   constructor(
     private readonly speechToText: ISpeechToTextService,
     private readonly evaluation: InterviewEvaluator,
+    private readonly db: IAppDao,
   ) {}
+
+  /**
+   * Rubric evaluation + timeline JSON from an existing transcription (no STT).
+   */
+  async evaluateTranscription(
+    transcription: SpeechTranscription,
+    jobId: string,
+    options?: TranscribeAndEvaluateOptions,
+  ): Promise<{ evaluation: InterviewEvaluationPayload }> {
+    const evaluation = await this.evaluateTranscriptionCore(transcription, jobId, options);
+    return { evaluation };
+  }
+
+  private async evaluateTranscriptionCore(
+    transcription: SpeechTranscription,
+    jobId: string,
+    options?: TranscribeAndEvaluateOptions,
+  ): Promise<InterviewEvaluationPayload> {
+    await persistJobEvaluationArtifacts(this.db, jobId, transcription, {
+      evaluationFrameTimesSec: options?.evaluationFrameTimesSec,
+      evaluationCodeSnapshot: options?.evaluationCodeSnapshot,
+      carryForwardEditorSnapshots: options?.carryForwardEditorSnapshots,
+      problemStatementText: options?.problemStatementText,
+    });
+    try {
+      return await this.evaluation.evaluate({ jobId });
+    } catch (evalErr) {
+      const msg = evalErr instanceof Error ? evalErr.message : String(evalErr);
+      return {
+        status: "failed",
+        provider: this.evaluation.provider,
+        errorMessage: `Evaluation request failed: ${msg}`,
+      };
+    }
+  }
 
   /**
    * Transcribes `audioFilePath`, then runs {@link InterviewEvaluator.evaluate}.
@@ -42,30 +73,7 @@ export class SpeechTranscriptionEvaluationOrchestrator {
     options?: TranscribeAndEvaluateOptions,
   ): Promise<{ transcription: SpeechTranscription; evaluation: InterviewEvaluationPayload }> {
     const transcription = await this.speechToText.transcribeFromFile(audioFilePath);
-    const evalInput = transcriptionToEvaluationInput(jobId, transcription);
-    const times = options?.evaluationFrameTimesSec ?? [];
-    const codeSnapshots = options?.evaluationCodeSnapshot ?? [];
-    let finalTranscript = buildFinalTranscriptJson(transcription, times, codeSnapshots);
-    if (options?.carryForwardEditorSnapshots) {
-      finalTranscript = applyCarryForwardEditorSnapshots(finalTranscript);
-    }
-    const timelineSegs = finalTranscriptToEvaluationTimeline(finalTranscript);
-    evalInput.interviewTimelineJson = stringifyInterviewTimelineForEvaluation(timelineSegs);
-    const problem = options?.problemStatementText?.trim();
-    if (problem) {
-      evalInput.problemStatementText = problem;
-    }
-    let evaluation: InterviewEvaluationPayload;
-    try {
-      evaluation = await this.evaluation.evaluate(evalInput);
-    } catch (evalErr) {
-      const msg = evalErr instanceof Error ? evalErr.message : String(evalErr);
-      evaluation = {
-        status: "failed",
-        provider: this.evaluation.provider,
-        errorMessage: `Evaluation request failed: ${msg}`,
-      };
-    }
+    const evaluation = await this.evaluateTranscriptionCore(transcription, jobId, options);
     return { transcription, evaluation };
   }
 }

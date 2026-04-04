@@ -1,3 +1,4 @@
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 
 /** Token counts from an LLM completion call. */
@@ -46,6 +47,11 @@ export interface LlmClient {
 
   /** Chat model this client was configured with (used for API calls and evaluation payloads). */
   getModelId(): string;
+
+  /**
+   * LangChain {@link BaseChatModel} for tool-calling agents and other Runnables (same underlying model as {@link getModelId}).
+   */
+  toBaseChatModel(temperature: number): BaseChatModel;
 
   /** Ask for a single JSON object (providers differ; callers parse with {@link parseInterviewEvaluationJson}). */
   completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult>;

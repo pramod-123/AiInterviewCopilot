@@ -1,6 +1,8 @@
-import fs from "node:fs/promises";
 import path from "node:path";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { AppTransactionRunner } from "../db.js";
+import type { IAppDao } from "../dao/IAppDao.js";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
+import type { SpeechUtteranceInsert } from "../dao/dto.js";
 import type { FastifyBaseLogger } from "fastify";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 import {
@@ -24,8 +26,10 @@ import { codeSnapshotsFromTimelineSec } from "./codeSnapshotsFromTimelineSec.js"
  */
 export class VideoJobProcessor {
   constructor(
-    private readonly db: PrismaClient,
+    private readonly db: IAppDao,
+    private readonly runInTransaction: AppTransactionRunner,
     private readonly paths: AppPaths,
+    private readonly files: IAppFileStore,
     private readonly speechAnalysis: SpeechTranscriptionEvaluationOrchestrator,
     private readonly log: FastifyBaseLogger,
     private readonly roiDetection: EditorRoiDetectionService,
@@ -33,30 +37,24 @@ export class VideoJobProcessor {
 
   /** Processes the **full** uploaded source video (no duration cap on HTTP jobs). */
   async process(jobId: string): Promise<void> {
-    const job = await this.db.job.findUnique({
-      where: { id: jobId },
-      include: { interviewVideo: true },
-    });
+    const job = await this.db.findJobWithInterviewVideo(jobId);
 
     if (!job?.interviewVideo) {
       await this.failJob(jobId, "No interview video found for this job.");
       return;
     }
 
-    await this.db.job.update({
-      where: { id: jobId },
-      data: { status: "PROCESSING", errorMessage: null },
-    });
+    await this.db.updateJob(jobId, { status: "PROCESSING", errorMessage: null });
 
     const uploadDir = this.paths.jobUploadDir(jobId);
     const pipelineDir = path.join(uploadDir, "pipeline");
     const videoPath = job.interviewVideo.filePath;
 
     const fpsEnv = Number(process.env.VIDEO_JOB_FRAME_FPS);
-    const frameExportFps =
-      Number.isFinite(fpsEnv) && fpsEnv > 0 ? fpsEnv : 2;
+    const frameExportFps = Number.isFinite(fpsEnv) && fpsEnv > 0 ? fpsEnv : 2;
 
     const pipeline = new E2eInterviewPipeline(new FfmpegRunner(), new TesseractRunner(), {
+      files: this.files,
       roiDetection: this.roiDetection,
       dedupedFrames: new FfmpegDedupedFrameExtractor(),
       speechAnalysis: this.speechAnalysis,
@@ -79,10 +77,7 @@ export class VideoJobProcessor {
   }
 
   private async failJob(jobId: string, errorMessage: string): Promise<void> {
-    await this.db.job.update({
-      where: { id: jobId },
-      data: { status: "FAILED", errorMessage },
-    });
+    await this.db.updateJob(jobId, { status: "FAILED", errorMessage });
   }
 
   private async persistPipelineSuccess(jobId: string, run: E2eInterviewPipelineRunResult): Promise<void> {
@@ -99,64 +94,38 @@ export class VideoJobProcessor {
 
     const sttRows = transcription.segments.map((seg, i) => this.toSttRow(jobId, seg, i));
 
-    const audioStat = await fs.stat(run.audioWavPath).catch(() => null);
+    const audioStat = await this.files.statOrNull(run.audioWavPath);
     const audioSize = audioStat ? Number(audioStat.size) : 0;
 
-    const payload = this.buildResultPayload(
-      transcription,
-      sttRows.length,
-      evaluation,
-      run,
-    );
+    const payload = this.buildResultPayload(transcription, sttRows.length, evaluation, run);
 
-    await this.db.$transaction(async (tx) => {
-      await tx.codeSnapshot.deleteMany({ where: { jobId, source: "VIDEO_OCR" } });
-      await tx.speechUtterance.deleteMany({ where: { jobId } });
+    await this.runInTransaction(async (tx) => {
+      await tx.deleteJobCodeSnapshotsBySource(jobId, "VIDEO_OCR");
+      await tx.deleteSpeechUtterancesByJobId(jobId);
 
       if (ocrRows.length > 0) {
-        await tx.codeSnapshot.createMany({ data: ocrRows });
+        await tx.createJobCodeSnapshots(ocrRows);
       }
       if (sttRows.length > 0) {
-        await tx.speechUtterance.createMany({ data: sttRows });
+        await tx.createSpeechUtterances(sttRows);
       }
 
-      await tx.interviewAudio.upsert({
-        where: { jobId },
-        create: {
-          jobId,
-          filePath: run.audioWavPath,
-          originalFilename: "audio.wav",
-          mimeType: "audio/wav",
-          sizeBytes: audioSize,
-          durationSeconds: durationSec > 0 ? durationSec : null,
-        },
-        update: {
-          filePath: run.audioWavPath,
-          originalFilename: "audio.wav",
-          mimeType: "audio/wav",
-          sizeBytes: audioSize,
-          durationSeconds: durationSec > 0 ? durationSec : null,
-        },
+      await tx.upsertInterviewAudio({
+        jobId,
+        filePath: run.audioWavPath,
+        originalFilename: "audio.wav",
+        mimeType: "audio/wav",
+        sizeBytes: audioSize,
+        durationSeconds: durationSec > 0 ? durationSec : null,
       });
 
-      await tx.result.upsert({
-        where: { jobId },
-        create: { jobId, payload },
-        update: { payload },
-      });
+      await tx.upsertResultPayload(jobId, payload);
 
-      await tx.job.update({
-        where: { id: jobId },
-        data: { status: "COMPLETED", errorMessage: null },
-      });
+      await tx.updateJob(jobId, { status: "COMPLETED", errorMessage: null });
     });
   }
 
-  private toSttRow(
-    jobId: string,
-    seg: SpeechSegment,
-    sequence: number,
-  ): Prisma.SpeechUtteranceCreateManyInput {
+  private toSttRow(jobId: string, seg: SpeechSegment, sequence: number): SpeechUtteranceInsert {
     const startMs = Math.max(0, Math.round(seg.startSec * 1000));
     let endMs = Math.max(0, Math.round(seg.endSec * 1000));
     if (endMs <= startMs) {
@@ -176,7 +145,7 @@ export class VideoJobProcessor {
     segmentCount: number,
     evaluation: InterviewEvaluationPayload,
     run: E2eInterviewPipelineRunResult,
-  ): Prisma.InputJsonValue {
+  ) {
     return {
       stt: {
         provider: transcription.providerId,

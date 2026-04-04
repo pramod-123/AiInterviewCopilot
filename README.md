@@ -2,7 +2,7 @@
 
 Backend service that ingests **interview screen recordings**, runs **speech-to-text** (Whisper) and a structured **rubric evaluation** (LLM). **Uploaded video** jobs also extract an **editor ROI** (vision) and **frame OCR** (Tesseract on cropped video). **Live LeetCode sessions** capture **tab video + periodic editor code snapshots** (no Tesseract on the recording); after **`/end`**, the server merges WebM, runs STT, and evaluates using those snapshots on the same timeline. Exposes an **HTTP API** for classic **video upload** jobs and **live sessions** from the Chrome extension.
 
-The **`browser-extension/`** Chrome extension starts sessions from **leetcode.com** problems, records via the **side panel** (mic + tab), uploads chunks to the server, and opens a **sessions** report page (video, transcript, dimensions, moment-by-moment feedback).
+The **Chrome** extension under **`browser-extension/chrome/`** starts sessions from **leetcode.com** problems, records via the **side panel** (mic + tab), uploads chunks to the server, and opens a **sessions** report page (video, transcript, dimensions, moment-by-moment feedback).
 
 ## Repository layout
 
@@ -10,7 +10,8 @@ The **`browser-extension/`** Chrome extension starts sessions from **leetcode.co
 |------|---------|
 | `server/` | Node.js + Fastify app, Prisma (SQLite), video pipeline, live-session merge/remux, prompts |
 | `server/tst/` | Vitest unit tests |
-| `browser-extension/` | MV3 extension: popup, side panel recorder, LeetCode content script, local **Sessions** UI |
+| `browser-extension/chrome/` | Chromium MV3 build: popup, side panel recorder, LeetCode content script, local **Sessions** UI |
+| `browser-extension/firefox/` | Reserved for a future Firefox build |
 | `demo/` | README screenshots, animated GIF preview, and muted MP4 walkthrough; not used by the server |
 | `server/media/` | Optional local files for pipeline/API tests (ignored by git except `.gitkeep`) |
 | `server/DESIGN.md` | **Detailed** server design (architecture, pipeline, Prisma, FFmpeg deep dive). |
@@ -41,7 +42,7 @@ Server listens on `http://127.0.0.1:3001` by default (`PORT` / `HOST` in `.env`)
 ## Browser extension (LeetCode live capture)
 
 1. Start the server (`npm run dev` in `server/`).
-2. Chrome → **Extensions** → **Developer mode** → **Load unpacked** → select the repo’s **`browser-extension/`** folder.
+2. Chrome → **Extensions** → **Developer mode** → **Load unpacked** → select the repo’s **`browser-extension/chrome/`** folder.
 3. Open a **`https://leetcode.com/problems/...`** tab, click the extension icon, set **API base URL** if needed (default `http://127.0.0.1:3001`), then **Start interview** (opens the **side panel** for tab capture + microphone).
 4. After you **End session on server**, open **Sessions** from the popup to review the merged **WebM**, **transcript**, **dimensions** analysis, and **moment-by-moment** feedback (timestamps seek the video and highlight transcript lines).
 
@@ -77,7 +78,7 @@ Toolbar **popup** (API base URL, mic hint, **Start interview** / **Sessions**):
 **Classic video jobs**
 
 - **`POST /api/interviews`** — multipart field `file`: interview **video** (e.g. `.mov`, `.mp4`)
-- **`GET /api/interviews/:id`** — job status; when complete, includes `result` (STT summary, evaluation payload, pipeline metadata). **Speech** is in `speechTranscript` (STT windows: `startMs`/`endMs`/`text`). **Persisted code/OCR** is in `codeSnapshots` (`offsetMs`, `text`, `source`: `VIDEO_OCR` \| `EDITOR_SNAPSHOT`). Field `transcripts` is a backward-compatible alias for `speechTranscript`.
+- **`GET /api/interviews/:id`** — job status; when complete, includes `result` (STT summary, evaluation payload, pipeline metadata). **Speech** is in `speechTranscript` (STT windows: `startMs`, `endMs`, `text`, **`speaker`** — diarized label when known, e.g. `INTERVIEWER` / `INTERVIEWEE`, else `null`). **Persisted code/OCR** is in `codeSnapshots` (`offsetMs`, `text`, `source`: `VIDEO_OCR` \| `EDITOR_SNAPSHOT`). Field `transcripts` is a backward-compatible alias for `speechTranscript`.
 
 **Live sessions (extension)**
 

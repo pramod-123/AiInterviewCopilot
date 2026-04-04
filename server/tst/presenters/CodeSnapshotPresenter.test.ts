@@ -1,23 +1,22 @@
-import type { CodeSnapshot } from "@prisma/client";
+import type { CodeSnapshotItem } from "../../src/dao/dto.js";
 import { describe, expect, it } from "vitest";
 import { CodeSnapshotPresenter } from "../../src/presenters/CodeSnapshotPresenter.js";
 
-function mockRow(partial: Partial<CodeSnapshot> & Pick<CodeSnapshot, "id">): CodeSnapshot {
+function mockItem(partial: Partial<CodeSnapshotItem> & Pick<CodeSnapshotItem, "id">): CodeSnapshotItem {
   return {
     jobId: "job-1",
     source: "VIDEO_OCR",
     offsetMs: 0,
     text: "",
     sequence: 0,
-    createdAt: new Date("2020-01-01T00:00:00.000Z"),
     ...partial,
-  } as CodeSnapshot;
+  };
 }
 
 describe("CodeSnapshotPresenter", () => {
   it("maps rows to DTOs", () => {
     const rows = [
-      mockRow({
+      mockItem({
         id: "b",
         source: "EDITOR_SNAPSHOT",
         offsetMs: 5000,

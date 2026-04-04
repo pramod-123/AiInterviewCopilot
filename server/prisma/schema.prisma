@@ -71,6 +71,8 @@ model SpeechUtterance {
   startMs   Int
   endMs     Int
   text      String
+  /// Best-effort speaker from diarization overlapping this STT window (e.g. INTERVIEWER, SPEAKER_00); null if unknown.
+  speakerLabel String?
   sequence  Int      @default(0)
   createdAt DateTime @default(now())
 
@@ -111,12 +113,14 @@ model InterviewLiveSession {
   status    LiveSessionStatus @default(ACTIVE)
   /// Problem statement / prompt scraped when recording starts (e.g. LeetCode).
   question  String?
+  /// When false, Gemini Live is not used; transcript is produced offline after session end (local/remote STT).
+  liveInterviewerEnabled Boolean @default(true)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  videoChunks     LiveVideoChunk[]
-  codeSnapshots   LiveCodeSnapshot[]
-  postProcessJob  Job?
+  videoChunks      LiveVideoChunk[]
+  codeSnapshots    LiveCodeSnapshot[]
+  postProcessJob   Job?
 }
 
 model LiveVideoChunk {

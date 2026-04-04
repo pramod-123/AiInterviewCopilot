@@ -39,7 +39,7 @@
         <p class="hero-sub" id="heroSub">LeetCode capture • Standby</p>
       </section>
 
-      <label class="mic-bento" for="chkPopupMic">
+      <label class="mic-bento mic-bento-mic" for="chkPopupMic">
         <span class="mic-bento-inner">
           <span class="mic-icon-wrap">
             <span class="material-symbols-outlined fill" aria-hidden="true">mic</span>
@@ -53,6 +53,22 @@
           <span class="switch-knob"></span>
         </span>
         <input type="checkbox" id="chkPopupMic" class="sr-only" checked />
+      </label>
+
+      <label class="mic-bento mic-bento-live" for="chkPopupLiveInterviewer">
+        <span class="mic-bento-inner">
+          <span class="mic-icon-wrap">
+            <span class="material-symbols-outlined fill" aria-hidden="true">graphic_eq</span>
+          </span>
+          <span class="mic-copy">
+            <h3>Live voice interviewer</h3>
+            <p>Gemini Live while recording; off = transcript only after you end</p>
+          </span>
+        </span>
+        <span class="switch" aria-hidden="true">
+          <span class="switch-knob"></span>
+        </span>
+        <input type="checkbox" id="chkPopupLiveInterviewer" class="sr-only" checked />
       </label>
 
       <div id="settingsPanel" class="panel-block hidden">

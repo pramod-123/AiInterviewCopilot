@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import path from "node:path";
+import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import { writeE2eSpeechAnalysisArtifacts } from "../services/e2e/E2eSpeechAnalysisArtifacts.js";
 import type {
   SpeechTranscriptionEvaluationOrchestrator,
@@ -55,6 +55,7 @@ export type E2eInterviewPipelineRunResult = {
 
 /** Injected collaborators for {@link E2eInterviewPipeline} (vision ROI, frame extract, STT + rubric LLM). */
 export type E2eInterviewPipelineDeps = {
+  files: IAppFileStore;
   roiDetection: EditorRoiDetectionService | null;
   dedupedFrames: IDedupedFrameExtractor;
   speechAnalysis: SpeechTranscriptionEvaluationOrchestrator;
@@ -223,10 +224,11 @@ export class E2eInterviewPipeline {
   async run(input: E2ePipelineInput): Promise<E2eInterviewPipelineRunResult> {
     const { inputVideoPath, outputDir, maxInputDurationSec, sttEvalJobId } = input;
     const dur = durationArgs(maxInputDurationSec);
+    const { files } = this.deps;
 
-    await fs.mkdir(outputDir, { recursive: true });
+    await files.mkdir(outputDir, { recursive: true });
     const framesDir = path.join(outputDir, "frames");
-    await fs.mkdir(framesDir, { recursive: true });
+    await files.mkdir(framesDir, { recursive: true });
 
     const audioWav = path.join(outputDir, "audio.wav");
     const videoVideoOnly = path.join(outputDir, "video-video-only.mp4");
@@ -294,7 +296,7 @@ export class E2eInterviewPipeline {
     const roiResult = await roiService.detectEditorRoi({ imagePath: firstFramePng });
     if (roiResult.problemStatement?.trim()) {
       problemStatement = roiResult.problemStatement.trim();
-      await fs.writeFile(problemPath, problemStatement, "utf-8");
+      await files.writeFile(problemPath, problemStatement, "utf-8");
     }
 
     if (!roiResult.crop) {
@@ -373,7 +375,7 @@ export class E2eInterviewPipeline {
 
     const roiEncodedDims = await ffprobeVideoStreamDimensions(roiCroppedMp4);
     editorRoiDebugPayload.roiCroppedMp4StreamDimensions = roiEncodedDims;
-    await fs.writeFile(editorRoiDebugPath, JSON.stringify(editorRoiDebugPayload, null, 2), "utf-8");
+    await files.writeFile(editorRoiDebugPath, JSON.stringify(editorRoiDebugPayload, null, 2), "utf-8");
 
     const roiOutW = roiEncodedDims?.width ?? "?";
     const roiOutH = roiEncodedDims?.height ?? "?";
@@ -382,9 +384,9 @@ export class E2eInterviewPipeline {
       `ROI clip encoded ${roiOutW}×${roiOutH}px on disk (was ${crop.width}×${crop.height}px before scale) — duration ${formatDurationSec.toFixed(2)}s; FFmpeg mpdecimate + PNG extract…`,
     );
 
-    for (const f of await fs.readdir(framesDir)) {
+    for (const f of await files.readdir(framesDir)) {
       if (f.endsWith(".png")) {
-        await fs.unlink(path.join(framesDir, f));
+        await files.unlink(path.join(framesDir, f));
       }
     }
 
@@ -394,13 +396,13 @@ export class E2eInterviewPipeline {
       outputDir: framesDir,
       fps,
     });
-    const manifest = await writeFramesManifest(framesManifestPath, extracted);
+    const manifest = await writeFramesManifest(files, framesManifestPath, extracted);
     this.progress(
       `Frames written: ${manifest.length} (mpdecimate, fps=${fps} cap, showinfo timestamps).`,
     );
 
     const times = manifest.map((m) => m.timestampSec);
-    const frameFiles = (await fs.readdir(framesDir))
+    const frameFiles = (await files.readdir(framesDir))
       .filter((f) => f.endsWith(".png"))
       .sort();
     const ocrConcurrency = resolveFrameOcrConcurrency(this.deps.frameOcrConcurrency);
@@ -446,12 +448,12 @@ export class E2eInterviewPipeline {
     this.progress(
       `Whisper done: ${transcription.segments.length} segments, ${(transcription.durationSec ?? 0).toFixed(1)}s audio; evaluation status=${evaluation.status}.`,
     );
-    await writeE2eSpeechAnalysisArtifacts(outputDir, jobId, transcription, evaluation);
+    await writeE2eSpeechAnalysisArtifacts(files, outputDir, jobId, transcription, evaluation);
 
     const aligned = alignFramesToSpeech(timesAligned, ocrs, transcription.segments);
 
     const finalTranscript = buildFinalTranscriptJson(transcription, timesAligned, ocrs);
-    await fs.writeFile(finalTranscriptPath, JSON.stringify(finalTranscript, null, 2), "utf-8");
+    await files.writeFile(finalTranscriptPath, JSON.stringify(finalTranscript, null, 2), "utf-8");
 
     const result = {
       meta: {
@@ -494,7 +496,7 @@ export class E2eInterviewPipeline {
       alignedTimeline: aligned,
     };
 
-    await fs.writeFile(resultJsonPath, JSON.stringify(result, null, 2), "utf-8");
+    await files.writeFile(resultJsonPath, JSON.stringify(result, null, 2), "utf-8");
     this.progress(
       "Wrote e2e-result.json, final-transcript.json, transcript.srt, interview-feedback.json — pipeline complete.",
     );
