@@ -22,7 +22,7 @@ function chatModel(env: NodeJS.ProcessEnv): string {
   if (ev && ev.startsWith("gpt-")) {
     return ev;
   }
-  return "gpt-4o-mini";
+  return "gpt-5.4";
 }
 
 type WhisperJsonSeg = { start?: number; end?: number; text?: string };

@@ -37,7 +37,7 @@ export class OpenAiLlmClient implements LlmClient {
     if (!client) {
       return null;
     }
-    const modelId = env.OPENAI_EVAL_MODEL?.trim() || "gpt-4o-mini";
+    const modelId = env.OPENAI_EVAL_MODEL?.trim() || "gpt-5.4";
     const speechModelId = env.OPENAI_STT_MODEL?.trim() || DEFAULT_OPENAI_STT_MODEL;
     return new OpenAiLlmClient(client, modelId, speechModelId);
   }

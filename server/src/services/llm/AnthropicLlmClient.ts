@@ -40,7 +40,7 @@ export class AnthropicLlmClient implements LlmClient {
       return null;
     }
     const modelId =
-      env.ANTHROPIC_EVAL_MODEL?.trim() || "claude-3-5-haiku-20241022";
+      env.ANTHROPIC_EVAL_MODEL?.trim() || "claude-opus-4-6";
     return new AnthropicLlmClient(key, modelId);
   }
 
