@@ -42,7 +42,8 @@ jobs:
             asset_suffix: linux-x64
           - os: macos-14
             asset_suffix: darwin-arm64
-          - os: macos-13
+          # macos-13 was removed from GitHub-hosted runners; use Intel image for darwin-x64 tarball.
+          - os: macos-15-intel
             asset_suffix: darwin-x64
     runs-on: ${{ matrix.os }}
     steps:
