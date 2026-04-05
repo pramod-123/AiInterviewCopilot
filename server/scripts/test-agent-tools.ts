@@ -59,15 +59,11 @@ async function main(): Promise<void> {
       printSection("getCodeProgressionInTimeRange(sessionId, 0, 3600)", {
         ok: true,
         data: {
-          initialCodePreview: prog.data.initialCode.slice(0, 400),
-          initialCodeLength: prog.data.initialCode.length,
-          finalCodePreview: prog.data.finalCode.slice(0, 400),
-          finalCodeLength: prog.data.finalCode.length,
-          deltaCount: prog.data.codeDeltas.length,
-          codeDeltas: prog.data.codeDeltas.map((d) => ({
-            timeStampSec: d.timeStampSec,
-            codeDeltaPreview: d.codeDelta.slice(0, 600),
-            codeDeltaLength: d.codeDelta.length,
+          snapshotCount: prog.data.snapshots.length,
+          snapshots: prog.data.snapshots.map((s) => ({
+            timeStampSec: s.timeStampSec,
+            textPreview: s.text.slice(0, 400),
+            textLength: s.text.length,
           })),
         },
       });

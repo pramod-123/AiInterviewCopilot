@@ -129,7 +129,7 @@ describe("DaoInterviewSessionTools", () => {
     });
   });
 
-  it("getCodeProgressionInTimeRange builds deltas between consecutive snapshots", async () => {
+  it("getCodeProgressionInTimeRange returns full text per snapshot in window", async () => {
     const db = mockDb({
       findLiveSessionIdForTools: vi.fn().mockResolvedValue({ id: "s1" }),
       findLiveCodeSnapshotsForSession: vi.fn().mockResolvedValue([
@@ -144,12 +144,11 @@ describe("DaoInterviewSessionTools", () => {
     if (!r.ok) {
       return;
     }
-    expect(r.data.initialCode).toBe("x");
-    expect(r.data.finalCode).toBe("y");
-    expect(r.data.codeDeltas).toHaveLength(2);
-    expect(r.data.codeDeltas[0]!.codeDelta).toBe("");
-    expect(r.data.codeDeltas[1]!.timeStampSec).toBe(2);
-    expect(r.data.codeDeltas[1]!.codeDelta).toContain("y");
+    expect(r.data.snapshots).toEqual([
+      { timeStampSec: 0, text: "x" },
+      { timeStampSec: 1, text: "x" },
+      { timeStampSec: 2, text: "y" },
+    ]);
   });
 
   it("getTranscriptionInTimeRange filters by overlap and validates job session", async () => {

@@ -136,17 +136,17 @@ The same ToolResult is also provided as the tool message artifact (structured) f
         ),
       {
         name: "get_code_progression_in_timerange",
-        description: `List editor snapshots in a time window and progressive diffs between consecutive snapshots.
+        description: `List full editor source at each live snapshot in a time window (no diffs).
 
 Input:
 - startTimeSec (number): window start in seconds (recording timeline).
 - endTimeSec (number, optional): window end in seconds; omit to include all snapshots from startTimeSec onward (no upper bound).
 
-Behavior: filters live code snapshots to offsetSeconds in [startTimeSec, endTimeSec] (or >= startTimeSec if end omitted), ordered by time. Builds one unified-diff hunk (no file headers) per step from previous to next snapshot.
+Behavior: filters live code snapshots to offsetSeconds in [startTimeSec, endTimeSec] (or >= startTimeSec if end omitted), ordered by time. Each entry is the complete editor text at that capture (same as get_code_at would return at that offset).
 
-Output: JSON string of ToolResult<{ initialCode: string; finalCode: string; codeDeltas: Array<{ timeStampSec: number; codeDelta: string }> }> (tool message content).
-- ok: true → initialCode/finalCode are first/last full source in range; codeDeltas[i] is the change at timeStampSec (empty string if identical to previous).
-- ok: true with empty range → initialCode, finalCode "", codeDeltas [].
+Output: JSON string of ToolResult<{ snapshots: Array<{ timeStampSec: number; text: string }> }> (tool message content).
+- ok: true → snapshots ordered oldest-first; compare consecutive entries yourself if you need how code changed.
+- ok: true with empty range → snapshots [].
 - ok: false → e.g. no snapshots in session, invalid range, or session missing.
 The same ToolResult is also provided as the tool message artifact (structured) for hosts that read it.`,
         schema: z.object({

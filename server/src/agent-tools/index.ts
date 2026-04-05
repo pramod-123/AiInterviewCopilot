@@ -1,6 +1,6 @@
 export type {
-  CodeProgressionDelta,
   CodeProgressionInTimeRange,
+  CodeProgressionSnapshot,
   ToolResult,
   TranscriptionInTimeRange,
   TranscriptionSegmentInRange,

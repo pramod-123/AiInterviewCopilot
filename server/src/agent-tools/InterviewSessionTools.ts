@@ -1,4 +1,3 @@
-import { createTwoFilesPatch, OMIT_HEADERS } from "diff";
 import type { IAppDao } from "../dao/IAppDao.js";
 import type {
   CodeProgressionInTimeRange,
@@ -50,7 +49,7 @@ export interface IInterviewSessionTools {
   /** `timestampSec` aligns with {@link LiveCodeSnapshot.offsetSeconds} (seconds since tab capture start). */
   getCodeAt(sessionId: string, timestampSec: number): Promise<ToolResult<GetCodeAtData>>;
   /**
-   * Editor code progression between times (seconds on the same timeline as `getCodeAt`).
+   * Ordered full editor snapshots between times (seconds on the same timeline as `getCodeAt`).
    * Spec name `start_id` is interpreted as **start time in seconds** (`startTimeSec`).
    */
   getCodeProgressionInTimeRange(
@@ -180,28 +179,13 @@ export class DaoInterviewSessionTools implements IInterviewSessionTools {
         (endTimeSec === undefined || s.offsetSeconds <= endTimeSec),
     );
     if (inRange.length === 0) {
-      return {
-        ok: true,
-        data: { initialCode: "", finalCode: "", codeDeltas: [] },
-      };
+      return { ok: true, data: { snapshots: [] } };
     }
-    const initialCode = inRange[0]!.code;
-    const finalCode = inRange[inRange.length - 1]!.code;
-    const codeDeltas: CodeProgressionInTimeRange["codeDeltas"] = [];
-    for (let i = 1; i < inRange.length; i++) {
-      const prev = inRange[i - 1]!.code;
-      const cur = inRange[i]!.code;
-      const timeStampSec = inRange[i]!.offsetSeconds;
-      const codeDelta =
-        prev === cur
-          ? ""
-          : createTwoFilesPatch("previous", "current", prev, cur, "", "", {
-              context: 3,
-              headerOptions: OMIT_HEADERS,
-            });
-      codeDeltas.push({ timeStampSec, codeDelta });
-    }
-    return { ok: true, data: { initialCode, finalCode, codeDeltas } };
+    const snapshots = inRange.map((s) => ({
+      timeStampSec: s.offsetSeconds,
+      text: s.code,
+    }));
+    return { ok: true, data: { snapshots } };
   }
 
   async getTranscriptionInTimeRange(

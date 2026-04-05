@@ -3,17 +3,16 @@ export type ToolResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-export type CodeProgressionDelta = {
+export type CodeProgressionSnapshot = {
   /** Seconds from recording start when this version was captured (same as live snapshot `offsetSeconds`). */
   timeStampSec: number;
-  /** Unified diff hunks only (no Index / `---` / `+++` file headers); `+` / `-` / context lines from `diff`. */
-  codeDelta: string;
+  /** Full editor source at this capture (same meaning as get_code_at `text`). */
+  text: string;
 };
 
 export type CodeProgressionInTimeRange = {
-  initialCode: string;
-  finalCode: string;
-  codeDeltas: CodeProgressionDelta[];
+  /** Snapshots with `offsetSeconds` in the requested window, oldest first. */
+  snapshots: CodeProgressionSnapshot[];
 };
 
 export type TranscriptionSegmentInRange = {

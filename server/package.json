@@ -45,7 +45,6 @@
     "@libsql/client": "^0.17.2",
     "@prisma/adapter-libsql": "^7.6.0",
     "@prisma/client": "^7.6.0",
-    "diff": "^8.0.4",
     "langchain": "^0.3.19",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",

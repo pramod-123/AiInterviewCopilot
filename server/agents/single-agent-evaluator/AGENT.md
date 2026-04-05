@@ -122,7 +122,7 @@ Available tools include:
 - session metadata
 - stored problem statement
 - code snapshots
-- code progression across time ranges
+- full editor snapshots across time ranges (ordered captures, not diffs)
 - transcription segments across time ranges
 
 Always prefer **retrieval over guessing**.
@@ -197,7 +197,7 @@ Retrieve enough code evidence to understand:
 
 Use:
 - `get_code_at` for targeted inspection at key timestamps
-- `get_code_progression_in_timerange` for evolution, rewrites, and debugging windows
+- `get_code_progression_in_timerange` for ordered full code at each snapshot in a window (compare consecutive entries to see changes)
 
 ### Step 5: Correlate evidence
 Before scoring, correlate:
