@@ -5,7 +5,13 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["coverage/**", "dist/**", "node_modules/**"],
+    ignores: [
+      "coverage/**",
+      "dist/**",
+      "node_modules/**",
+      ".venv*/**",
+      "venv*/**",
+    ],
   },
   {
     files: ["**/*.ts"],
