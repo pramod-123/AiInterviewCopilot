@@ -24,6 +24,7 @@
 #   INSTALL_PREFIX              optional; skip install-dir prompt
 #   INSTALL_SKIP_PYTHON_VENVS   if 1, skip WhisperX / local Whisper venv steps (CI / smoke)
 #   INSTALL_CONSUMER_START_SERVER  if 1 with INSTALL_CONSUMER_YES, start API after install
+#   NO_COLOR / INSTALL_NO_COLOR   if set, disable ANSI styling (see https://no-color.org/)
 #
 set -euo pipefail
 
@@ -40,13 +41,68 @@ SERVER_ASSET_BASENAME=""
 EXTENSION_ASSET_NAME="ai-interview-copilot-chrome-extension.zip"
 
 # ---------------------------------------------------------------------------
-# UI
+# UI — terminal theme (cyan / steel; respects NO_COLOR)
 # ---------------------------------------------------------------------------
 
+if [[ -z "${NO_COLOR:-}" && -z "${INSTALL_NO_COLOR:-}" && -t 1 ]]; then
+  C_RST=$'\033[0m'
+  C_DIM=$'\033[2m'
+  C_BOLD=$'\033[1m'
+  C_OK=$'\033[32m'
+  C_WARN=$'\033[33m'
+  C_ERR=$'\033[31m'
+  C_ACCENT=$'\033[36m'
+  C_ACCENT_B=$'\033[1;96m'
+  C_BAR=$'\033[38;5;109m'
+  C_TITLE=$'\033[1;97m'
+  C_PROMPT=$'\033[38;5;80m'
+  C_MENU_HI=$'\033[30;46m'
+  C_MENU_LO=$'\033[2;37m'
+else
+  C_RST=''
+  C_DIM=''
+  C_BOLD=''
+  C_OK=''
+  C_WARN=''
+  C_ERR=''
+  C_ACCENT=''
+  C_ACCENT_B=''
+  C_BAR=''
+  C_TITLE=''
+  C_PROMPT=''
+  C_MENU_HI=''
+  C_MENU_LO=''
+fi
+
 say() { printf '%b\n' "$*"; }
+say_dim() { printf '%b\n' "${C_DIM}$*${C_RST}"; }
+say_ok() { printf '%b\n' "${C_OK}$*${C_RST}"; }
+say_warn() { printf '%b\n' "${C_WARN}$*${C_RST}"; }
+say_note() { printf '%b\n' "${C_DIM}${C_WARN}▸${C_RST} ${C_DIM}$*${C_RST}"; }
+
 banner() {
+  local title="$*"
+  local n=$((${#title} + 4))
   say ""
-  say "\033[1m=== $* ===\033[0m"
+  printf '%b╭' "${C_BAR}"
+  local i
+  for ((i = 0; i < n; i++)); do printf '─'; done
+  printf '╮%b\n' "${C_RST}"
+  printf '%b│ %s%s%s%s│%b\n' "${C_BAR}" "${C_TITLE}" "${title}" "${C_RST}${C_BAR}" "${C_RST}"
+  printf '%b╰' "${C_BAR}"
+  for ((i = 0; i < n; i++)); do printf '─'; done
+  printf '╯%b\n' "${C_RST}"
+}
+
+install_welcome() {
+  say ""
+  printf '%b╔══════════════════════════════════════════════════════════════╗%b\n' "${C_ACCENT_B}" "${C_RST}"
+  printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_RST}${C_BOLD}" "Ai Interview Copilot" "${C_ACCENT_B}" "${C_RST}"
+  printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_DIM}" "Installer · ${VERSION_WIRED}" "${C_ACCENT_B}" "${C_RST}"
+  printf '%b╚══════════════════════════════════════════════════════════════╝%b\n' "${C_ACCENT_B}" "${C_RST}"
+  say ""
+  say_dim "Release server + Chrome extension · host tools (ffmpeg, Tesseract, …) · optional Python venvs · SQLite & .env"
+  say ""
 }
 
 prompt() {
@@ -54,10 +110,10 @@ prompt() {
   local def="${2:-}"
   local reply
   if [[ -n "$def" ]]; then
-    read -r -p "${text} [${def}]: " reply || true
+    read -r -p "${C_PROMPT}${text}${C_RST} ${C_DIM}[${def}]:${C_RST} " reply || true
     reply="${reply:-$def}"
   else
-    read -r -p "${text}: " reply || true
+    read -r -p "${C_PROMPT}${text}${C_RST}${C_DIM}:${C_RST} " reply || true
   fi
   printf '%s' "$reply"
 }
@@ -66,11 +122,11 @@ prompt_yn() {
   local text="$1"
   local def="${2:-y}"
   if [[ "${AUTO_YES}" == "1" ]]; then
-    say "${text} → yes (INSTALL_CONSUMER_YES=1)"
+    say_dim "→ ${text} — yes (INSTALL_CONSUMER_YES=1)"
     return 0
   fi
   local r
-  r="$(prompt "$text (y/n)" "$def")"
+  r="$(prompt "${text} (y/n)" "$def")"
   r="$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]')"
   [[ "$r" == y || "$r" == yes ]]
 }
@@ -80,7 +136,7 @@ prompt_yn() {
 read_secret_prompt() {
   local prompt_text="$1"
   local val=""
-  read -r -s -p "${prompt_text} (hidden): " val </dev/tty || true
+  read -r -s -p "${C_PROMPT}${prompt_text}${C_DIM} (hidden):${C_RST} " val </dev/tty || true
   printf '\n' >/dev/tty
   printf '%s' "$val"
 }
@@ -102,14 +158,14 @@ choose_llm_provider_menu() {
   local k1 k2
   while true; do
     printf '\n' >/dev/tty
-    printf '%b\n' '\033[1m--- LLM provider ---\033[0m' >/dev/tty
-    printf '%s\n' "↑/↓ to move, Enter to confirm (or type 1 or 2)" >/dev/tty
+    printf '%b  %sLLM provider%s  %s↑/↓ · Enter · 1/2%s\n' "${C_BAR}" "${C_ACCENT_B}" "${C_RST}" "${C_DIM}" "${C_RST}" >/dev/tty
+    printf '%b  %s──────────────────%s\n' "${C_BAR}" "${C_DIM}" "${C_RST}" >/dev/tty
     local i
     for ((i = 0; i < n; i++)); do
       if [[ "$i" -eq "$sel" ]]; then
-        printf '  \033[7m▶ %s\033[0m\n' "${labels[$i]}" >/dev/tty
+        printf '  %b ▶ %s%s\n' "${C_MENU_HI}" "${labels[$i]}" "${C_RST}" >/dev/tty
       else
-        printf '    %s\n' "${labels[$i]}" >/dev/tty
+        printf '  %b    %s%s\n' "${C_MENU_LO}" "${labels[$i]}" "${C_RST}" >/dev/tty
       fi
     done
     if ! IFS= read -rsn1 k1 </dev/tty 2>/dev/null; then
@@ -348,16 +404,14 @@ download_asset() {
 # ---------------------------------------------------------------------------
 
 main() {
-  banner "Ai Interview Copilot — installer (${VERSION_WIRED})"
-  say "Installs host dependencies (Node 20+, ffmpeg, Tesseract, Python, unzip), downloads the"
-  say "release server tarball + Chrome extension, creates WhisperX and local Whisper venvs, and configures SQLite."
-  say ""
+  install_welcome
+  banner "Repository & install path"
 
   if [[ -z "$REPO" ]]; then
     REPO="$(prompt "GitHub repository (owner/name) for releases" "")"
   fi
   if [[ -z "$REPO" || "$REPO" != */* ]]; then
-    echo "A GitHub repo in the form owner/name is required." >&2
+    printf '%b%s%b\n' "${C_ERR}" "A GitHub repo in the form owner/name is required." "${C_RST}" >&2
     exit 1
   fi
 
@@ -370,7 +424,7 @@ main() {
   INSTALL_PREFIX="$(mkdir -p "${INSTALL_PREFIX}" && cd "${INSTALL_PREFIX}" && pwd)"
 
   if ! prompt_yn "Proceed with install into ${INSTALL_PREFIX} from ${REPO} @ ${RELEASE_TAG}?" "y"; then
-    say "Aborted."
+    say_warn "Aborted."
     exit 0
   fi
 
@@ -380,13 +434,13 @@ main() {
   local need_install=false
   if ! node_is_ok; then
     need_install=true
-    say "Node.js 20+ not found or too old."
+    say_warn "Node.js 20+ not found or too old."
   fi
   for c in ffmpeg ffprobe tesseract python3 unzip curl tar; do
     command -v "$c" >/dev/null 2>&1 || need_install=true
   done
   if [[ "$need_install" == true ]]; then
-    say "Missing or not usable on PATH (the server needs these for video, audio, and local tools):"
+    say_warn "Missing or not usable on PATH (the server needs these for video, audio, and local tools):"
     if ! node_is_ok; then
       say "  - Node.js 20+ (run: node --version)"
     fi
@@ -402,10 +456,10 @@ main() {
       }
     fi
   else
-    say "Host dependency check passed — required tools are on PATH:"
-    say "  Video/audio: ffmpeg ($(command -v ffmpeg)), ffprobe ($(command -v ffprobe))"
-    say "  OCR: tesseract ($(command -v tesseract))  ·  Node $(node --version 2>/dev/null)  ·  python3 ($(command -v python3))"
-    say "  Utilities: unzip, curl, tar"
+    say_ok "Host dependency check passed — required tools are on PATH:"
+    say_dim "  Video/audio: ffmpeg ($(command -v ffmpeg)), ffprobe ($(command -v ffprobe))"
+    say_dim "  OCR: tesseract ($(command -v tesseract))  ·  Node $(node --version 2>/dev/null)  ·  python3 ($(command -v python3))"
+    say_dim "  Utilities: unzip, curl, tar"
   fi
 
   maybe_nvm
@@ -445,8 +499,8 @@ main() {
   local openai_key anthropic_key llm_choice hf_token gemini_key gemini_model
   local gemini_model_default="gemini-2.5-flash-native-audio-preview-12-2025"
   if [[ "${AUTO_YES}" == "1" ]]; then
-    say "INSTALL_CONSUMER_YES=1: not prompting for secrets. Using OPENAI_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER,"
-    say "HF_TOKEN / HUGGING_FACE_HUB_TOKEN, GEMINI_API_KEY, GEMINI_LIVE_MODEL from the environment if set."
+    say_dim "INSTALL_CONSUMER_YES=1: not prompting for secrets — using OPENAI_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER,"
+    say_dim "HF_TOKEN / HUGGING_FACE_HUB_TOKEN, GEMINI_API_KEY, GEMINI_LIVE_MODEL from the environment if set."
     openai_key="$(trim_crlf "${OPENAI_API_KEY:-}")"
     anthropic_key="$(trim_crlf "${ANTHROPIC_API_KEY:-}")"
     llm_choice="$(trim_crlf "${LLM_PROVIDER:-}")"
@@ -456,10 +510,10 @@ main() {
   else
     choose_llm_index=0
     if [[ -r /dev/tty && -w /dev/tty ]]; then
-      say "Choose the LLM vendor (arrow keys or 1 / 2, then Enter)."
+      say "${C_ACCENT}Choose LLM vendor:${C_RST} arrow keys or ${C_BOLD}1${C_RST} / ${C_BOLD}2${C_RST}, then Enter."
       choose_llm_provider_menu || true
     else
-      say "No TTY for menu; falling back to OpenAI. Set LLM_PROVIDER in .env if you need Anthropic."
+      say_warn "No TTY for menu; falling back to OpenAI. Set LLM_PROVIDER in .env if you need Anthropic."
       choose_llm_index=0
     fi
     if [[ "${choose_llm_index}" -eq 1 ]]; then
@@ -476,9 +530,9 @@ main() {
       openai_key="$(trim_crlf "$(read_secret_prompt "OpenAI API key (Enter to skip)")")"
       anthropic_key=""
     fi
-    say "Hugging Face token (hf_…) is used for WhisperX/pyannote gated models (see huggingface.co/settings/tokens)."
+    say_dim "Hugging Face token (hf_…) — WhisperX/pyannote (huggingface.co/settings/tokens)."
     hf_token="$(trim_crlf "$(read_secret_prompt "Hugging Face token (Enter to skip)")")"
-    say "Google Gemini (optional): voice interviewer Live WebSocket needs GEMINI_API_KEY and GEMINI_LIVE_MODEL."
+    say_dim "Google Gemini (optional) — Live WebSocket needs GEMINI_API_KEY and GEMINI_LIVE_MODEL."
     gemini_key="$(trim_crlf "$(read_secret_prompt "Gemini API key (Enter to skip)")")"
     gemini_model=""
     if [[ -n "$gemini_key" ]]; then
@@ -516,19 +570,19 @@ main() {
   fi
 
   if [[ "$llm_choice" == "anthropic" && -z "$anthropic_key" ]]; then
-    say "Note: LLM_PROVIDER=anthropic but no Anthropic key was set — add ANTHROPIC_API_KEY in .env before using the LLM."
+    say_note "LLM_PROVIDER=anthropic but no Anthropic key — add ANTHROPIC_API_KEY in .env before using the LLM."
   fi
   if [[ "$llm_choice" == "openai" && -z "$openai_key" ]]; then
-    say "Note: LLM_PROVIDER=openai but no OpenAI key was set — add OPENAI_API_KEY in .env for LLM, video ROI, and related OpenAI features."
+    say_note "LLM_PROVIDER=openai but no OpenAI key — add OPENAI_API_KEY in .env for LLM, video ROI, and related OpenAI features."
   fi
   if [[ -z "$hf_token" ]]; then
-    say "Note: No HF_TOKEN — add one in .env before using WhisperX/pyannote diarization."
+    say_note "No HF_TOKEN — add one in .env before using WhisperX/pyannote diarization."
   fi
   if [[ -z "$gemini_key" ]]; then
-    say "Note: Gemini Live is off until GEMINI_API_KEY and GEMINI_LIVE_MODEL are set in .env."
+    say_note "Gemini Live is off until GEMINI_API_KEY and GEMINI_LIVE_MODEL are set in .env."
   fi
 
-  say "Prisma db push..."
+  printf '%b%s%b\n' "${C_ACCENT}" "Prisma db push…" "${C_RST}"
   # Prisma may not load .env before prisma.config defaults; consumer layout puts config at install root.
   export DATABASE_URL="file:${db_file}"
   npx prisma db push
@@ -602,24 +656,24 @@ EOS
   RUN_SERVER_AFTER=false
   if [[ "${AUTO_YES}" == "1" ]]; then
     if [[ "${INSTALL_CONSUMER_START_SERVER:-}" == "1" ]]; then
-      say "Start the API server now? → yes (INSTALL_CONSUMER_START_SERVER=1)"
+      say_dim "→ Start the API server now? — yes (INSTALL_CONSUMER_START_SERVER=1)"
       RUN_SERVER_AFTER=true
     else
-      say "Start the API server now? → no (set INSTALL_CONSUMER_START_SERVER=1 with INSTALL_CONSUMER_YES to start)"
+      say_dim "→ Start the API server now? — no (set INSTALL_CONSUMER_START_SERVER=1 with INSTALL_CONSUMER_YES to start)"
     fi
   elif prompt_yn "Start the API server now?" "n"; then
     RUN_SERVER_AFTER=true
   fi
 
   banner "Done"
-  say "Install root:     ${INSTALL_PREFIX}"
-  say "Start server:     ${starter}"
-  say "Add to PATH (optional): export PATH=\"${INSTALL_PREFIX}/bin:\${PATH}\""
+  say_ok "Install root  ${INSTALL_PREFIX}"
+  say_ok "Start server  ${starter}"
+  say_dim "Optional PATH: export PATH=\"${INSTALL_PREFIX}/bin:\${PATH}\""
   say ""
-  say "Edit ${INSTALL_PREFIX}/.env if needed — EVALUATION_PROVIDER, HF_TOKEN, GEMINI_*, etc. (STT_PROVIDER stays local.)"
+  say_dim "Tweak ${INSTALL_PREFIX}/.env — EVALUATION_PROVIDER, HF_TOKEN, GEMINI_*, … (STT_PROVIDER stays local.)"
   if [[ "${EXT_INSTALLED}" == true ]] && [[ -f "${EXT_DIR}/manifest.json" ]]; then
     say ""
-    say "Chrome → Extensions → Developer mode → Load unpacked → ${EXT_DIR}"
+    say "${C_ACCENT}Chrome:${C_RST} Extensions → Developer mode → Load unpacked → ${C_BOLD}${EXT_DIR}${C_RST}"
   fi
   say ""
 
