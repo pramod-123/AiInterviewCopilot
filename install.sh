@@ -25,6 +25,7 @@
 #   INSTALL_SKIP_PYTHON_VENVS   if 1, skip WhisperX / local Whisper venv steps (CI / smoke)
 #   INSTALL_CONSUMER_START_SERVER  if 1 with INSTALL_CONSUMER_YES, start API after install
 #   NO_COLOR / INSTALL_NO_COLOR   if set, disable ANSI styling (see https://no-color.org/)
+#   INSTALL_NO_CURL_PROGRESS      if set, hide curl transfer bar for large downloads
 #
 set -euo pipefail
 
@@ -79,6 +80,40 @@ say_dim() { printf '%b\n' "${C_DIM}$*${C_RST}"; }
 say_ok() { printf '%b\n' "${C_OK}$*${C_RST}"; }
 say_warn() { printf '%b\n' "${C_WARN}$*${C_RST}"; }
 say_note() { printf '%b\n' "${C_DIM}${C_WARN}▸${C_RST} ${C_DIM}$*${C_RST}"; }
+
+# Green check + message (completed step).
+tick_done() {
+  printf '%b %s %s%b\n' "${C_OK}" "✓" "$*" "${C_RST}"
+}
+
+# [████░░░░] style bar; cur/total 0..total (total >= 1).
+draw_progress_bar() {
+  local cur=${1:-0}
+  local total=${2:-1}
+  local w=${3:-32}
+  [[ "$total" -lt 1 ]] && total=1
+  [[ "$cur" -gt "$total" ]] && cur=$total
+  [[ "$cur" -lt 0 ]] && cur=0
+  local filled=$((cur * w / total))
+  [[ "$filled" -gt "$w" ]] && filled=$w
+  local empty=$((w - filled))
+  local pct=$((cur * 100 / total))
+  printf '%b│' "${C_BAR}"
+  local i
+  for ((i = 0; i < filled; i++)); do printf '█'; done
+  for ((i = 0; i < empty; i++)); do printf '%b░%b' "${C_DIM}" "${C_RST}"; done
+  printf '%b│%b %3d%%%b' "${C_BAR}" "${C_DIM}" "$pct" "${C_RST}"
+}
+
+# Increment global step counter and print overall progress line (dim label).
+bump_install_progress() {
+  INSTALL_PROGRESS_NUM=$((INSTALL_PROGRESS_NUM + 1))
+  local n=$INSTALL_PROGRESS_NUM
+  local t=${INSTALL_PROGRESS_TOTAL:-10}
+  printf '  '
+  draw_progress_bar "$n" "$t" 30
+  printf '  %b%s  (%d/%d)%b\n' "${C_DIM}" "$*" "$n" "$t" "${C_RST}"
+}
 
 banner() {
   local title="$*"
@@ -396,7 +431,11 @@ download_asset() {
   local dest="$2"
   local auth=()
   [[ -n "${GITHUB_TOKEN}" ]] && auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  curl -fsSL "${auth[@]}" -L -o "${dest}" "${url}"
+  if [[ -z "${NO_COLOR:-}" && -z "${INSTALL_NO_CURL_PROGRESS:-}" && -t 2 ]]; then
+    curl -fSL --progress-bar "${auth[@]}" -L -o "${dest}" "${url}"
+  else
+    curl -fsSL "${auth[@]}" -L -o "${dest}" "${url}"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -404,6 +443,9 @@ download_asset() {
 # ---------------------------------------------------------------------------
 
 main() {
+  INSTALL_PROGRESS_TOTAL=11
+  INSTALL_PROGRESS_NUM=0
+
   install_welcome
   banner "Repository & install path"
 
@@ -427,6 +469,8 @@ main() {
     say_warn "Aborted."
     exit 0
   fi
+  tick_done "Install target confirmed (${RELEASE_TAG} → ${INSTALL_PREFIX})"
+  bump_install_progress "Configured"
 
   maybe_nvm
 
@@ -466,6 +510,8 @@ main() {
   if ! ensure_runtime_after_install; then
     exit 1
   fi
+  tick_done "Host dependencies satisfied (Node, ffmpeg, tesseract, …)"
+  bump_install_progress "Host ready"
 
   SERVER_ASSET_BASENAME="ai-interview-copilot-server-$(detect_asset_suffix).tar.gz"
   TMP_JSON="$(mktemp)"
@@ -475,14 +521,21 @@ main() {
   trap cleanup EXIT
 
   banner "Download server (${SERVER_ASSET_BASENAME})"
+  say_dim "Fetching release metadata…"
   fetch_release_json "${REPO}" "${RELEASE_TAG}" "${TMP_JSON}"
+  tick_done "Release metadata loaded"
   SERVER_URL="$(github_download_url "${SERVER_ASSET_BASENAME}" "${TMP_JSON}")" || {
     echo "Asset ${SERVER_ASSET_BASENAME} not found in this release." >&2
     exit 1
   }
+  say_dim "Downloading ${SERVER_ASSET_BASENAME} (curl progress below)…"
   download_asset "${SERVER_URL}" "${TMP_TGZ}"
-  say "Extracting into ${INSTALL_PREFIX}..."
+  tick_done "Server archive downloaded"
+  bump_install_progress "Downloaded"
+  say_dim "Extracting into ${INSTALL_PREFIX}…"
   tar xzf "${TMP_TGZ}" -C "${INSTALL_PREFIX}"
+  tick_done "Server unpacked"
+  bump_install_progress "Extracted"
 
   cd "${INSTALL_PREFIX}"
 
@@ -494,6 +547,8 @@ main() {
   if ! grep -q '^DATABASE_URL=' .env 2>/dev/null; then
     upsert_env_line "DATABASE_URL" "DATABASE_URL=\"file:${db_file}\""
   fi
+  tick_done "Data directory and DATABASE_URL ready"
+  bump_install_progress "Data / .env base"
 
   banner "API keys (LLM, Gemini Live, Hugging Face)"
   local openai_key anthropic_key llm_choice hf_token gemini_key gemini_model
@@ -581,34 +636,46 @@ main() {
   if [[ -z "$gemini_key" ]]; then
     say_note "Gemini Live is off until GEMINI_API_KEY and GEMINI_LIVE_MODEL are set in .env."
   fi
+  tick_done "API keys and provider env written (as entered)"
+  bump_install_progress "Secrets / LLM"
 
   printf '%b%s%b\n' "${C_ACCENT}" "Prisma db push…" "${C_RST}"
   # Prisma may not load .env before prisma.config defaults; consumer layout puts config at install root.
   export DATABASE_URL="file:${db_file}"
   npx prisma db push
+  tick_done "Database schema applied (Prisma)"
+  bump_install_progress "Prisma"
 
   banner "Python: WhisperX (diarization / WhisperX SRT)"
   local venv_wx="${INSTALL_PREFIX}/venv-whisperx"
   if [[ "${INSTALL_SKIP_PYTHON_VENVS:-}" == "1" ]]; then
-    say "INSTALL_SKIP_PYTHON_VENVS=1: skipping WhisperX venv."
+    say_dim "INSTALL_SKIP_PYTHON_VENVS=1: skipping WhisperX venv."
+    tick_done "WhisperX venv skipped"
   elif prompt_yn "Create venv and pip install whisperx (large download; needed for DIARIZATION_PROVIDER=whisperx)?" "y"; then
     require_cmds python3
-    say "Creating ${venv_wx} …"
+    say_dim "Creating ${venv_wx} …"
     python3 -m venv "${venv_wx}"
     "${venv_wx}/bin/pip" install -U pip setuptools wheel
+    say_dim "Installing whisperx (pip may show its own progress)…"
     "${venv_wx}/bin/pip" install "whisperx"
     upsert_env_line "DIARIZATION_PYTHON" "DIARIZATION_PYTHON=${venv_wx}/bin/python"
     upsert_env_line "DIARIZATION_PROVIDER" "DIARIZATION_PROVIDER=whisperx"
-    say "If you skipped HF_TOKEN earlier, set it in .env for pyannote (see diarize_dialogue_whisperx.py)."
+    tick_done "WhisperX venv ready (${venv_wx})"
+    say_dim "If you skipped HF_TOKEN earlier, set it in .env for pyannote (see diarize_dialogue_whisperx.py)."
+  else
+    tick_done "WhisperX venv declined"
   fi
+  bump_install_progress "WhisperX"
 
   banner "Python: local Whisper CLI (offline STT)"
   local venv_whisper="${INSTALL_PREFIX}/venv-whisper"
   if [[ "${INSTALL_SKIP_PYTHON_VENVS:-}" == "1" ]]; then
-    say "INSTALL_SKIP_PYTHON_VENVS=1: skipping local Whisper venv."
+    say_dim "INSTALL_SKIP_PYTHON_VENVS=1: skipping local Whisper venv."
+    tick_done "Local Whisper venv skipped"
   elif prompt_yn "Create venv and pip install openai-whisper (for STT_PROVIDER=local)?" "y"; then
     python3 -m venv "${venv_whisper}"
     "${venv_whisper}/bin/pip" install -U pip setuptools wheel
+    say_dim "Installing openai-whisper…"
     "${venv_whisper}/bin/pip" install "openai-whisper"
     local whisper_sh="${INSTALL_PREFIX}/bin/whisper"
     mkdir -p "${INSTALL_PREFIX}/bin"
@@ -618,8 +685,11 @@ exec "${venv_whisper}/bin/whisper" "\$@"
 EOF
     chmod +x "${whisper_sh}"
     upsert_env_line "LOCAL_WHISPER_EXECUTABLE" "LOCAL_WHISPER_EXECUTABLE=${whisper_sh}"
-    say "LOCAL_WHISPER_EXECUTABLE set; STT_PROVIDER remains local."
+    tick_done "Local Whisper CLI ready (${whisper_sh})"
+  else
+    tick_done "Local Whisper venv declined"
   fi
+  bump_install_progress "Local Whisper"
 
   banner "Chrome extension"
   EXT_DIR="${INSTALL_PREFIX}/chrome-extension"
@@ -631,17 +701,22 @@ EOF
     ext_ok=$?
     set -e
     if [[ "${ext_ok}" -eq 0 && -n "${EXT_URL}" ]]; then
+      say_dim "Downloading Chrome extension zip…"
       download_asset "${EXT_URL}" "${TMP_EXT}"
       rm -rf "${EXT_DIR}"
       mkdir -p "${EXT_DIR}"
       unzip -q -o "${TMP_EXT}" -d "${EXT_DIR}"
-      say "Extension: ${EXT_DIR}"
+      tick_done "Chrome extension unpacked → ${EXT_DIR}"
       EXT_INSTALLED=true
     else
-      say "No ${EXTENSION_ASSET_NAME} on this release — skip or load unpacked from source."
+      say_warn "No ${EXTENSION_ASSET_NAME} on this release — skip or load unpacked from source."
+      tick_done "Chrome extension skipped (asset missing)"
     fi
     rm -f "${TMP_EXT}"
+  else
+    tick_done "Chrome extension download skipped"
   fi
+  bump_install_progress "Extension"
 
   local starter="${INSTALL_PREFIX}/start-server.sh"
   cat >"${starter}" <<'EOS'
@@ -652,6 +727,8 @@ cd "$ROOT"
 exec node dist/index.js
 EOS
   chmod +x "${starter}"
+  tick_done "start-server.sh installed"
+  bump_install_progress "Launcher"
 
   RUN_SERVER_AFTER=false
   if [[ "${AUTO_YES}" == "1" ]]; then
@@ -666,6 +743,11 @@ EOS
   fi
 
   banner "Done"
+  printf '  '
+  draw_progress_bar "${INSTALL_PROGRESS_TOTAL}" "${INSTALL_PROGRESS_TOTAL}" 30
+  printf '%b  100%% — all steps%b\n' "${C_OK}" "${C_RST}"
+  tick_done "Installation complete"
+  say ""
   say_ok "Install root  ${INSTALL_PREFIX}"
   say_ok "Start server  ${starter}"
   say_dim "Optional PATH: export PATH=\"${INSTALL_PREFIX}/bin:\${PATH}\""
