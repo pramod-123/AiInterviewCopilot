@@ -93,11 +93,17 @@ body {
 .brand {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--primary);
+}
+
+.brand-logo {
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .header-actions {

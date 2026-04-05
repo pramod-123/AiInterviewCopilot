@@ -148,7 +148,7 @@ install_try_logo_png() {
   fi
   [[ -n "${INSTALLER_SCRIPT_DIR}" ]] || return 1
   local png=""
-  for png in "${INSTALLER_SCRIPT_DIR}/brand/app-mark-512.png" "${INSTALLER_SCRIPT_DIR}/browser-extension/chrome/icons/icon-512.png"; do
+  for png in "${INSTALLER_SCRIPT_DIR}/brand/app-mark-512.png" "${INSTALLER_SCRIPT_DIR}/browser-extension/chrome/icons/icon-512.png" "${INSTALLER_SCRIPT_DIR}/icons/icon-512.png"; do
     [[ -f "${png}" ]] && break
   done
   [[ -f "${png}" ]] || return 1
@@ -923,7 +923,7 @@ command lsof -ti "tcp:${PORT}" -sTCP:LISTEN 2>/dev/null | command xargs kill 2>/
 sleep 0.3
 {
   echo ""
-  echo "===== $(date) — starting server (PORT=${PORT}) ====="
+  echo "===== $(date -u +"%Y-%m-%dT%H:%M:%SZ") UTC · local $(date +"%Y-%m-%d %H:%M:%S %Z") — starting server (PORT=${PORT}) ====="
 } >>"${LOG}"
 nohup node dist/index.js >>"${LOG}" 2>&1 &
 echo $! >"${ROOT}/server.pid"
@@ -937,6 +937,7 @@ EOS
 # Stop the API: kill whatever is listening on PORT from .env (default 3001). Removes server.pid if present.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG="${ROOT}/server.log"
 PORT=3001
 if [[ -f "${ROOT}/.env" ]]; then
   _line=$(command grep -E '^[[:space:]]*PORT[[:space:]]*=' "${ROOT}/.env" 2>/dev/null | tail -1)
@@ -950,6 +951,10 @@ fi
 [[ "${PORT}" =~ ^[0-9]+$ ]] || PORT=3001
 if command lsof -ti "tcp:${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   command lsof -ti "tcp:${PORT}" -sTCP:LISTEN | command xargs kill 2>/dev/null || true
+  {
+    echo ""
+    echo "===== $(date -u +"%Y-%m-%dT%H:%M:%SZ") UTC · local $(date +"%Y-%m-%d %H:%M:%S %Z") — stopped server (PORT=${PORT}) ====="
+  } >>"${LOG}" 2>/dev/null || true
   printf 'Stopped process listening on port %s.\n' "${PORT}"
 else
   printf 'No process listening on port %s.\n' "${PORT}"

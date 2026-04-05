@@ -73,12 +73,15 @@ jobs:
 
       - name: Pack tarball
         run: |
+          mkdir -p icons
+          cp "${GITHUB_WORKSPACE}/browser-extension/chrome/icons/icon-512.png" icons/icon-512.png
           ASSET="ai-interview-copilot-server-${{ matrix.asset_suffix }}.tar.gz"
           tar czf "../${ASSET}" \
             dist node_modules package.json package-lock.json \
             prisma prisma.config.ts .env.example \
             prompts agents \
-            scripts/diarize_dialogue_whisperx.py
+            scripts/diarize_dialogue_whisperx.py \
+            icons/icon-512.png
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "../${ASSET}" | awk '{print $1}' > "../${ASSET}.sha256"
           else

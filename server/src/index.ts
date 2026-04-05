@@ -7,6 +7,20 @@ const host = process.env.HOST || "127.0.0.1";
 
 const server = new InterviewCopilotServer();
 
+process.on("uncaughtException", (err, origin) => {
+  try {
+    server.instance.log.fatal({ err, origin }, "uncaughtException");
+  } catch {
+    console.error("uncaughtException", err);
+  }
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  server.instance.log.error({ err }, "unhandledRejection");
+});
+
 let shuttingDown = false;
 
 async function shutdown(signal: string): Promise<void> {
@@ -43,6 +57,6 @@ try {
   await server.registerGeminiLiveWebSocket();
   await server.listen(port, host);
 } catch (err) {
-  server.instance.log.error(err);
+  server.instance.log.error({ err }, "Failed to start server");
   process.exit(1);
 }

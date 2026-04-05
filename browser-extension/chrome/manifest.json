@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ai Interview Copilot — Live capture",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Records the LeetCode tab (video + tab audio) and editor snapshots to your AiInterviewCopilot server.",
   "icons": {
     "16": "icons/icon-16.png",

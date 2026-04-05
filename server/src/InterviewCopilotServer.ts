@@ -3,6 +3,7 @@ import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import { appDao, runAppTransaction } from "./db.js";
+import { buildFastifyLoggerOptions } from "./logging/buildFastifyLoggerOptions.js";
 import { appFileStore } from "./appFileStore.js";
 import { JobRoutesController } from "./http/JobRoutesController.js";
 import { LiveSessionRoutesController } from "./http/LiveSessionRoutesController.js";
@@ -32,7 +33,7 @@ export class InterviewCopilotServer {
     speechToTextFactory?: SpeechToTextServiceFactory,
     evaluationFactory?: InterviewEvaluationServiceFactory,
   ) {
-    this.app = Fastify({ logger: true });
+    this.app = Fastify({ logger: buildFastifyLoggerOptions() });
     this.paths = new AppPaths();
     this.speechToTextFactory = speechToTextFactory ?? new SpeechToTextServiceFactory();
     this.evaluationFactory =
@@ -127,6 +128,17 @@ export class InterviewCopilotServer {
 
   async listen(port: number, host: string): Promise<void> {
     await this.app.listen({ port, host });
-    this.app.log.info(`Server listening on http://${host}:${port}`);
+    const startedAt = new Date();
+    const url = `http://${host}:${port}`;
+    this.app.log.info(
+      {
+        url,
+        host,
+        port,
+        node: process.version,
+        startedAt: startedAt.toISOString(),
+      },
+      `Server listening on ${url} (started at ${startedAt.toISOString()})`,
+    );
   }
 }
