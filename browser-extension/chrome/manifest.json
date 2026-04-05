@@ -3,6 +3,12 @@
   "name": "Ai Interview Copilot — Live capture",
   "version": "1.8.2",
   "description": "Records the LeetCode tab (video + tab audio) and editor snapshots to your AiInterviewCopilot server.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "minimum_chrome_version": "116",
   "permissions": ["storage", "scripting", "tabs", "tabCapture", "sidePanel", "activeTab"],
   "host_permissions": [
@@ -16,7 +22,13 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Interview Copilot (LeetCode)"
+    "default_title": "Interview Copilot (LeetCode)",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "side_panel": {
     "default_path": "sidepanel.html"

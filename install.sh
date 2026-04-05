@@ -15,7 +15,7 @@
 #
 # Environment:
 #   AI_INTERVIEW_COPILOT_REPO   default GitHub owner/name for releases
-#   GITHUB_TOKEN                API rate limits / private repos
+#   GITHUB_TOKEN                API rate limits / private repos; also check-update.sh
 #   INSTALL_CONSUMER_YES        if 1, treat all y/n prompts as "yes" (no secret prompts;
 #                               set OPENAI_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER,
 #                               HF_TOKEN or HUGGING_FACE_HUB_TOKEN, GEMINI_API_KEY,
@@ -79,6 +79,14 @@ else
   C_MENU_LO=''
 fi
 
+# Directory containing this script when run from a file (empty for curl | bash).
+INSTALLER_SCRIPT_DIR=""
+_install_src="${BASH_SOURCE[0]:-}"
+if [[ -n "${_install_src}" && -f "${_install_src}" && "${_install_src}" != /dev/fd/* && "${_install_src}" != /proc/self/fd/* ]]; then
+  INSTALLER_SCRIPT_DIR="$(cd "$(dirname "${_install_src}")" && pwd)"
+fi
+unset _install_src
+
 say() { printf '%b\n' "$*"; }
 say_dim() { printf '%b\n' "${C_DIM}$*${C_RST}"; }
 say_ok() { printf '%b\n' "${C_OK}$*${C_RST}"; }
@@ -133,7 +141,48 @@ banner() {
   printf '╯%b\n' "${C_RST}"
 }
 
+# Optional bitmap when repo assets exist and chafa (brew) or iTerm imgcat is available.
+install_try_logo_png() {
+  if [[ -n "${NO_COLOR:-}" || -n "${INSTALL_NO_COLOR:-}" ]] || [[ ! -t 1 ]]; then
+    return 1
+  fi
+  [[ -n "${INSTALLER_SCRIPT_DIR}" ]] || return 1
+  local png=""
+  for png in "${INSTALLER_SCRIPT_DIR}/brand/app-mark-512.png" "${INSTALLER_SCRIPT_DIR}/browser-extension/chrome/icons/icon-512.png"; do
+    [[ -f "${png}" ]] && break
+  done
+  [[ -f "${png}" ]] || return 1
+  if command -v chafa >/dev/null 2>&1; then
+    if chafa --fill=block --symbols=block -s 38x16 "${png}" 2>/dev/null; then
+      say ""
+      return 0
+    fi
+  fi
+  if [[ -n "${ITERM_SESSION_ID:-}" ]] && command -v imgcat >/dev/null 2>&1; then
+    if imgcat -W 38 "${png}" 2>/dev/null; then
+      say ""
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Mic + code brackets + tie (ASCII); always shown when stdout is a TTY.
+install_logo_ascii() {
+  if [[ ! -t 1 ]]; then
+    return 0
+  fi
+  say ""
+  printf '%b              ╭──────────╮              %s< >%s%b\n' "${C_BAR}" "${C_ACCENT_B}" "${C_BAR}" "${C_RST}"
+  printf '%b              │    ●     │%b\n' "${C_BAR}" "${C_RST}"
+  printf '%b              │   ───    │%b\n' "${C_BAR}" "${C_RST}"
+  printf '%b              │    ╲╱    │%b\n' "${C_BAR}" "${C_RST}"
+  printf '%b              ╰────┬─────╯%b\n' "${C_BAR}" "${C_RST}"
+  say ""
+}
+
 install_welcome() {
+  install_try_logo_png || install_logo_ascii
   say ""
   printf '%b╔══════════════════════════════════════════════════════════════╗%b\n' "${C_ACCENT_B}" "${C_RST}"
   printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_RST}${C_BOLD}" "Ai Interview Copilot" "${C_ACCENT_B}" "${C_RST}"
@@ -251,6 +300,7 @@ choose_llm_provider_menu() {
 # Append aicopilot / aicopilot-server helpers to ~/.zshrc (once; uses ZSH_LAUNCHER_MARKER).
 maybe_append_zsh_launcher_snippet() {
   local prefix="$1"
+  local repo="$2"
   local zshrc="${ZDOTDIR:-$HOME}/.zshrc"
   if [[ "${INSTALL_SKIP_ZSH_SNIPPET:-}" == "1" ]]; then
     tick_done "Shell shortcuts skipped (INSTALL_SKIP_ZSH_SNIPPET=1)"
@@ -283,6 +333,7 @@ maybe_append_zsh_launcher_snippet() {
   {
     printf '\n%s\n' "${ZSH_LAUNCHER_MARKER}"
     printf 'export AI_INTERVIEW_COPILOT_HOME=%q\n' "${prefix}"
+    printf 'export AI_INTERVIEW_COPILOT_REPO=%q\n' "${repo}"
     cat <<'EOS'
 aicopilot-server() {
   local root="${AI_INTERVIEW_COPILOT_HOME}"
@@ -335,9 +386,20 @@ aicopilot-server-stop() {
 }
 
 alias aicopilot-stop='aicopilot-server-stop'
+
+aicopilot-check-update() {
+  local root="${AI_INTERVIEW_COPILOT_HOME}"
+  if [[ ! -x "${root}/check-update.sh" ]]; then
+    echo "aicopilot-check-update: missing ${root}/check-update.sh" >&2
+    return 1
+  fi
+  (cd "$root" && ./check-update.sh)
+}
+
+alias aicopilot-update='aicopilot-check-update'
 EOS
   } >>"$zshrc"
-  say_ok "Shell shortcuts → ${zshrc} — ${C_BOLD}aicopilot${C_RST} · ${C_BOLD}aicopilot-bg${C_RST} · ${C_BOLD}aicopilot-stop${C_RST}"
+  say_ok "Shell shortcuts → ${zshrc} — ${C_BOLD}aicopilot${C_RST} · ${C_BOLD}aicopilot-bg${C_RST} · ${C_BOLD}aicopilot-stop${C_RST} · ${C_BOLD}aicopilot-update${C_RST}"
   tick_done "Shell shortcuts installed"
 }
 
@@ -645,6 +707,8 @@ main() {
   tick_done "Server unpacked"
   bump_install_progress "Extracted"
 
+  printf '%s\n' "${REPO}" >"${INSTALL_PREFIX}/.install-repo"
+
   cd "${INSTALL_PREFIX}"
 
   if [[ ! -f .env ]]; then
@@ -893,10 +957,64 @@ fi
 rm -f "${ROOT}/server.pid"
 EOS
   chmod +x "${stopper}"
-  tick_done "start-server.sh + background launcher + stop-server.sh (→ server.log)"
+
+  local checker="${INSTALL_PREFIX}/check-update.sh"
+  cat >"${checker}" <<'EOS'
+#!/usr/bin/env bash
+# Compare local package.json version to GitHub releases/latest for the install repo.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_FILE="${ROOT}/.install-repo"
+REPO="${AI_INTERVIEW_COPILOT_REPO:-}"
+if [[ -z "${REPO}" && -f "${REPO_FILE}" ]]; then
+  REPO="$(tr -d '[:space:]' <"${REPO_FILE}" || true)"
+fi
+if [[ -z "${REPO}" || "${REPO}" != */* ]]; then
+  printf 'check-update: set AI_INTERVIEW_COPILOT_REPO=owner/name or write %s\n' "${REPO_FILE}" >&2
+  exit 1
+fi
+if [[ ! -f "${ROOT}/package.json" ]]; then
+  echo "check-update: missing ${ROOT}/package.json" >&2
+  exit 1
+fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "check-update: node is required to read package.json" >&2
+  exit 1
+fi
+local_ver="$(cd "${ROOT}" && node -p "require('./package.json').version" 2>/dev/null || true)"
+if [[ -z "${local_ver}" ]]; then
+  echo "check-update: could not read version from package.json" >&2
+  exit 1
+fi
+auth=()
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+fi
+url="https://api.github.com/repos/${REPO}/releases/latest"
+if ! json="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "${url}" 2>/dev/null)"; then
+  printf 'check-update: failed to fetch %s (network, private repo, or API rate limit — try GITHUB_TOKEN).\n' "${url}" >&2
+  exit 2
+fi
+tag="$(printf '%s' "${json}" | sed -n 's/.*\"tag_name\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1)"
+if [[ -z "${tag}" ]]; then
+  echo "check-update: could not parse tag_name from GitHub response" >&2
+  exit 2
+fi
+remote_ver="${tag#v}"
+highest="$(printf '%s\n%s\n' "${local_ver}" "${remote_ver}" | sort -V | tail -1)"
+if [[ "${highest}" == "${remote_ver}" && "${local_ver}" != "${remote_ver}" ]]; then
+  printf 'Update available: installed %s → latest release %s (%s)\n' "${local_ver}" "${remote_ver}" "${tag}"
+  printf 'Re-run the installer from the repo (./install.sh) or download a newer release tarball.\n'
+  exit 0
+fi
+printf 'Up to date: installed %s (latest GitHub release %s)\n' "${local_ver}" "${tag}"
+exit 0
+EOS
+  chmod +x "${checker}"
+  tick_done "start/stop/background scripts + check-update.sh"
   bump_install_progress "Launcher"
 
-  maybe_append_zsh_launcher_snippet "${INSTALL_PREFIX}"
+  maybe_append_zsh_launcher_snippet "${INSTALL_PREFIX}" "${REPO}"
   bump_install_progress "Shell shortcuts"
 
   RUN_SERVER_AFTER=false
@@ -921,9 +1039,10 @@ EOS
   say_ok "Start server  ${starter}"
   say_ok "Background + logs  ${starter_bg}  (appends ${INSTALL_PREFIX}/server.log, writes ${INSTALL_PREFIX}/server.pid)"
   say_ok "Stop server     ${stopper}"
+  say_ok "Check updates   ${checker}  (shell: aicopilot-update)"
   local _zshrc_done="${ZDOTDIR:-$HOME}/.zshrc"
   if [[ -f "${_zshrc_done}" ]] && grep -qF "${ZSH_LAUNCHER_MARKER}" "${_zshrc_done}" 2>/dev/null; then
-    say_dim "Shell: ${C_BOLD}aicopilot${C_RST} · ${C_BOLD}aicopilot-bg${C_RST} · ${C_BOLD}aicopilot-stop${C_RST} (source ${_zshrc_done} first)"
+    say_dim "Shell: ${C_BOLD}aicopilot${C_RST} · ${C_BOLD}aicopilot-bg${C_RST} · ${C_BOLD}aicopilot-stop${C_RST} · ${C_BOLD}aicopilot-update${C_RST} (source ${_zshrc_done} first)"
   fi
   say_dim "Optional PATH: export PATH=\"${INSTALL_PREFIX}/bin:\${PATH}\""
   say ""
