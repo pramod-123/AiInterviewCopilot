@@ -1,5 +1,7 @@
 # Build a self-contained server tarball per OS/arch (dist + pruned node_modules + prisma).
-# Tag a release as v1.2.3 to publish assets install-from-github-release.sh can download.
+# Publishes assets to a GitHub Release when:
+#   - You push tag v*.*.* (publish runs automatically), or
+#   - You run "Run workflow" and set `tag` (e.g. v1.2.3) — create/push the tag first if needed.
 
 name: Release
 
@@ -8,6 +10,11 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.2.3). Required for manual runs so publish-release is not skipped."
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -89,7 +96,9 @@ jobs:
       - build-assets
       - build-chrome-extension
     runs-on: ubuntu-latest
-    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    if: >
+      (github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')) ||
+      github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -99,5 +108,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           files: artifacts/*
           generate_release_notes: true
