@@ -182,7 +182,8 @@ trim_crlf() {
   printf '%s' "$s" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-# Interactive menu on /dev/tty: ↑/↓ (or 1/2) then Enter. Sets global choose_llm_index: 0=OpenAI, 1=Anthropic.
+# Interactive menu on /dev/tty: ↑/↓ redraw in place; Enter / Space / 1 / 2 to confirm.
+# Sets global choose_llm_index: 0=OpenAI, 1=Anthropic.
 choose_llm_provider_menu() {
   local labels=(
     "OpenAI — LLM evaluation, video ROI, and local Whisper STT (typical setup)"
@@ -190,34 +191,44 @@ choose_llm_provider_menu() {
   )
   local sel=0
   local n=${#labels[@]}
+  # Lines we paint each frame (must match printf count): title + rule + n options
+  local menu_lines=$((2 + n))
+  local drawn=0
   local k1 k2
   while true; do
-    printf '\n' >/dev/tty
-    printf '%b  %sLLM provider%s  %s↑/↓ · Enter · 1/2%s\n' "${C_BAR}" "${C_ACCENT_B}" "${C_RST}" "${C_DIM}" "${C_RST}" >/dev/tty
-    printf '%b  %s──────────────────%s\n' "${C_BAR}" "${C_DIM}" "${C_RST}" >/dev/tty
+    if [[ "$drawn" -eq 1 ]]; then
+      # Move cursor up to first menu line and redraw in place (no scroll spam)
+      printf '\033[%dA' "$menu_lines" >/dev/tty
+    fi
+    drawn=1
+    printf '%b  %sLLM provider%s  %s↑/↓ move · Enter/Space confirm · 1/2 pick%s\n' "${C_BAR}" "${C_ACCENT_B}" "${C_RST}" "${C_DIM}" "${C_RST}" >/dev/tty
+    printf '%b  %s────────────────────────────────────────────────────────%s\n' "${C_BAR}" "${C_DIM}" "${C_RST}" >/dev/tty
     local i
     for ((i = 0; i < n; i++)); do
       if [[ "$i" -eq "$sel" ]]; then
-        printf '  %b ▶ %s%s\n' "${C_MENU_HI}" "${labels[$i]}" "${C_RST}" >/dev/tty
+        printf '  %b ▶ %s%s\033[K\n' "${C_MENU_HI}" "${labels[$i]}" "${C_RST}" >/dev/tty
       else
-        printf '  %b    %s%s\n' "${C_MENU_LO}" "${labels[$i]}" "${C_RST}" >/dev/tty
+        printf '  %b    %s%s\033[K\n' "${C_MENU_LO}" "${labels[$i]}" "${C_RST}" >/dev/tty
       fi
     done
-    if ! IFS= read -rsn1 k1 </dev/tty 2>/dev/null; then
+    # Read one byte; Enter is often '\n' but some terminals/IDE shells need empty or different handling
+    if ! IFS= read -r -s -n1 k1 </dev/tty 2>/dev/null; then
       choose_llm_index=0
+      printf '\n' >/dev/tty
       return 1
     fi
     if [[ "$k1" == $'\e' ]]; then
-      IFS= read -rsn2 k2 </dev/tty 2>/dev/null || true
+      # CSI / SS3 arrows: ESC [ A / ESC [ B or ESC O A / ESC O B
+      IFS= read -r -s -n2 k2 </dev/tty 2>/dev/null || true
       case "$k2" in
-        '[A' | 'OA')
-          sel=$(((sel + n - 1) % n))
-          ;;
-        '[B' | 'OB')
-          sel=$(((sel + 1) % n))
-          ;;
+        '[A' | 'OA') sel=$(((sel + n - 1) % n)) ;;
+        '[B' | 'OB') sel=$(((sel + 1) % n)) ;;
       esac
-    elif [[ "$k1" == $'\n' || "$k1" == $'\r' ]]; then
+    elif [[ "$k1" == $'\n' || "$k1" == $'\r' || -z "$k1" ]]; then
+      choose_llm_index=$sel
+      printf '\n' >/dev/tty
+      return 0
+    elif [[ "$k1" == ' ' ]]; then
       choose_llm_index=$sel
       printf '\n' >/dev/tty
       return 0
