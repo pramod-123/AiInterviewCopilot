@@ -58,6 +58,14 @@ export class SpeechTranscriptionEvaluationOrchestrator {
       carryForwardEditorSnapshots: options?.carryForwardEditorSnapshots,
       problemStatementText: options?.problemStatementText,
     });
+    return this.evaluatePersistedJob(jobId);
+  }
+
+  /**
+   * Rubric evaluation only — assumes {@link SpeechUtterance} (and job code snapshots) are already persisted.
+   * Used by live session post-process so tool-calling agents read final rows from the DB.
+   */
+  async evaluatePersistedJob(jobId: string): Promise<InterviewEvaluationPayload> {
     try {
       return await this.evaluation.evaluate({ jobId });
     } catch (evalErr) {

@@ -313,7 +313,8 @@ export class LiveSessionPostProcessor {
       : null;
 
     let transcription: SpeechTranscription;
-    let evaluation: InterviewEvaluationPayload;
+    /** Set only when WhisperX fallback uses {@link SpeechTranscriptionEvaluationOrchestrator.transcribeAndEvaluate} (eval runs before final persist). */
+    let evaluationEarly: InterviewEvaluationPayload | undefined;
     let transcriptSource: "gemini_live_realtime" | "local_stt" = "local_stt";
     let geminiUtterancesForRows: GeminiDerivedUtterance[] | null = null;
     let diarization: SrtGenerationResult | undefined;
@@ -323,8 +324,6 @@ export class LiveSessionPostProcessor {
         transcriptSource = "gemini_live_realtime";
         geminiUtterancesForRows = geminiBundle.utterances;
         transcription = speechTranscriptionFromGeminiUtterances(geminiBundle.utterances);
-        const ev = await this.speechAnalysis.evaluateTranscription(transcription, jobId, evalOpts);
-        evaluation = ev.evaluation;
         this.log.info(
           { sessionId, jobId, segments: transcription.segments.length },
           "Live session transcript from Gemini Live realtime (input/output transcription).",
@@ -337,8 +336,6 @@ export class LiveSessionPostProcessor {
         if (d && d.segments.length > 0) {
           diarization = d;
           transcription = speechTranscriptionFromWhisperXSrt(d);
-          const ev = await this.speechAnalysis.evaluateTranscription(transcription, jobId, evalOpts);
-          evaluation = ev.evaluation;
           this.log.info(
             {
               sessionId,
@@ -355,7 +352,7 @@ export class LiveSessionPostProcessor {
           );
           const out = await this.speechAnalysis.transcribeAndEvaluate(audioWav, jobId, evalOpts);
           transcription = out.transcription;
-          evaluation = out.evaluation;
+          evaluationEarly = out.evaluation;
         }
       } else {
         const rawTx = await this.speechAnalysis.transcribeFromFile(audioWav);
@@ -387,8 +384,6 @@ export class LiveSessionPostProcessor {
           rawTx.providerId,
           rawTx.modelId,
         );
-        const ev = await this.speechAnalysis.evaluateTranscription(transcription, jobId, evalOpts);
-        evaluation = ev.evaluation;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -397,8 +392,6 @@ export class LiveSessionPostProcessor {
     }
 
     try {
-      await writeE2eSpeechAnalysisArtifacts(this.files, artifactDir, jobId, transcription, evaluation);
-
       if (transcriptSource === "local_stt" && !diarization) {
         try {
           const d = await this.srtGenerator.generate({
@@ -467,19 +460,6 @@ export class LiveSessionPostProcessor {
         }
       }
 
-      const payload = this.buildResultPayload(
-        sessionId,
-        transcription,
-        sttRows.length,
-        evaluation,
-        artifactDir,
-        merged.path,
-        session.codeSnapshots.length,
-        dialogueMerge,
-        diarization,
-        transcriptSource,
-      );
-
       await this.runInTransaction(async (tx) => {
         await tx.deleteSpeechUtterancesByJobId(jobId);
         if (sttRows.length > 0) {
@@ -502,7 +482,27 @@ export class LiveSessionPostProcessor {
         if (dialogueMerge) {
           await tx.updateInterviewVideoSizeBytes(jobId, mergedRecordingSizeBytes);
         }
+      });
 
+      const evaluation =
+        evaluationEarly ?? (await this.speechAnalysis.evaluatePersistedJob(jobId));
+
+      await writeE2eSpeechAnalysisArtifacts(this.files, artifactDir, jobId, transcription, evaluation);
+
+      const payload = this.buildResultPayload(
+        sessionId,
+        transcription,
+        sttRows.length,
+        evaluation,
+        artifactDir,
+        merged.path,
+        session.codeSnapshots.length,
+        dialogueMerge,
+        diarization,
+        transcriptSource,
+      );
+
+      await this.runInTransaction(async (tx) => {
         await tx.upsertResultPayload(jobId, payload);
 
         await tx.updateJob(jobId, { status: "COMPLETED", errorMessage: null });
