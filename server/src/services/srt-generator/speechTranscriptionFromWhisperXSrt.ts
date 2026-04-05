@@ -4,7 +4,7 @@ import { SpeechSegment, SpeechTranscription } from "../../types/speechTranscript
 /** Builds evaluation STT payload from a WhisperX {@link SrtGenerationResult} (single pipeline run). */
 export function speechTranscriptionFromWhisperXSrt(result: SrtGenerationResult): SpeechTranscription {
   const segments = result.segments.map(
-    (s) => new SpeechSegment(s.startMs / 1000, s.endMs / 1000, s.text.trim()),
+    (s) => new SpeechSegment(s.startMs / 1000, s.endMs / 1000, s.text.trim(), s.speakerLabel),
   );
   const durationSec = segments.length > 0 ? Math.max(...segments.map((seg) => seg.endSec)) : 0;
   const fullText =

@@ -73,7 +73,7 @@ export async function loadInterviewEvaluationInputForJob(
       : null;
 
   const segments = utterances.map(
-    (u) => new SpeechSegment(u.startMs / 1000, u.endMs / 1000, u.text),
+    (u) => new SpeechSegment(u.startMs / 1000, u.endMs / 1000, u.text, u.speakerLabel),
   );
   const durationSec = Math.max(...utterances.map((u) => u.endMs)) / 1000;
   const fullText = segments.map((s) => s.text).join(" ").trim() || null;

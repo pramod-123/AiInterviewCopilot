@@ -45,5 +45,6 @@ describe("speechTranscriptionFromGeminiUtterances", () => {
     expect(tr.providerId).toBe("gemini_live_realtime");
     expect(tr.segments).toHaveLength(1);
     expect(tr.fullText).toContain("A");
+    expect(tr.segments[0]!.speakerLabel).toBe("INTERVIEWEE");
   });
 });

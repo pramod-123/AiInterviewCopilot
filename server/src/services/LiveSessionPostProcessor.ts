@@ -22,7 +22,7 @@ import { codeSnapshotsFromTimelineSec } from "./codeSnapshotsFromTimelineSec.js"
 import { FfmpegRunner, ffprobeFormatDurationSec } from "../video-pipeline/ffmpegExtract.js";
 import type { SrtGenerationResult } from "../types/srtGeneration.js";
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
-import { SpeechSegment, type SpeechTranscription } from "../types/speechTranscription.js";
+import { SpeechSegment, SpeechTranscription } from "../types/speechTranscription.js";
 import { isWhisperXDiarizationEnabled } from "./diarization/runWhisperXDiarization.js";
 import { speakerLabelForInterval } from "./diarization/speakerLabelForInterval.js";
 import type { ISrtGenerator } from "./srt-generator/ISrtGenerator.js";
@@ -358,9 +358,37 @@ export class LiveSessionPostProcessor {
           evaluation = out.evaluation;
         }
       } else {
-        const out = await this.speechAnalysis.transcribeAndEvaluate(audioWav, jobId, evalOpts);
-        transcription = out.transcription;
-        evaluation = out.evaluation;
+        const rawTx = await this.speechAnalysis.transcribeFromFile(audioWav);
+        try {
+          const d = await this.srtGenerator.generate({
+            audioFilePath: wavForDiarize,
+            audioSource: audioSourceForDiarize,
+          });
+          if (d) {
+            diarization = d;
+          }
+        } catch (err) {
+          this.log.warn({ err, sessionId }, "SRT generation before evaluation failed.");
+        }
+        const labeledSegments = rawTx.segments.map((seg) => {
+          const startMs = Math.max(0, Math.round(seg.startSec * 1000));
+          let endMs = Math.max(0, Math.round(seg.endSec * 1000));
+          if (endMs <= startMs) {
+            endMs = startMs + 1;
+          }
+          const label = speakerLabelForInterval(startMs, endMs, diarization);
+          return new SpeechSegment(seg.startSec, seg.endSec, seg.text, label);
+        });
+        transcription = new SpeechTranscription(
+          labeledSegments,
+          rawTx.durationSec,
+          rawTx.language,
+          rawTx.fullText,
+          rawTx.providerId,
+          rawTx.modelId,
+        );
+        const ev = await this.speechAnalysis.evaluateTranscription(transcription, jobId, evalOpts);
+        evaluation = ev.evaluation;
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -414,7 +442,10 @@ export class LiveSessionPostProcessor {
               if (endMs <= startMs) {
                 endMs = startMs + 1;
               }
-              const label = speakerLabelForInterval(startMs, endMs, diarization);
+              const label =
+                seg.speakerLabel !== undefined && seg.speakerLabel !== null
+                  ? seg.speakerLabel
+                  : speakerLabelForInterval(startMs, endMs, diarization);
               return this.toSttRow(jobId, seg, i, label);
             });
       const editorSnapshotRows = codeSnapshotsFromTimelineSec(timesSec, codeTexts).map((r) => ({

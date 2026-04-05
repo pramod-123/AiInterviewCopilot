@@ -78,7 +78,10 @@ export function mergeGeminiRealtimeRecordsToUtterances(
 }
 
 export function speechTranscriptionFromGeminiUtterances(utterances: GeminiDerivedUtterance[]): SpeechTranscription {
-  const segments = utterances.map((u) => u.segment);
+  const segments = utterances.map(
+    (u) =>
+      new SpeechSegment(u.segment.startSec, u.segment.endSec, u.segment.text, u.speakerLabel),
+  );
   const durationSec =
     segments.length > 0 ? Math.max(...segments.map((s) => s.endSec), 0) : 0;
   const fullText = segments

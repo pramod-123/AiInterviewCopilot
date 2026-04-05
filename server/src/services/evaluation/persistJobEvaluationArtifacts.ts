@@ -24,13 +24,17 @@ function toUtteranceRows(jobId: string, transcription: SpeechTranscription): Spe
     if (endMs <= startMs) {
       endMs = startMs + 1;
     }
-    return {
+    const row: SpeechUtteranceInsert = {
       jobId,
       startMs,
       endMs,
       text: seg.text,
       sequence,
     };
+    if (seg.speakerLabel !== undefined) {
+      row.speakerLabel = seg.speakerLabel;
+    }
+    return row;
   });
 }
 

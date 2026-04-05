@@ -29,6 +29,13 @@ export class SpeechTranscriptionEvaluationOrchestrator {
   ) {}
 
   /**
+   * STT only (no rubric). Use when labels must be attached before {@link evaluateTranscription}.
+   */
+  async transcribeFromFile(audioFilePath: string): Promise<SpeechTranscription> {
+    return this.speechToText.transcribeFromFile(audioFilePath);
+  }
+
+  /**
    * Rubric evaluation + timeline JSON from an existing transcription (no STT).
    */
   async evaluateTranscription(
