@@ -1,8 +1,8 @@
 /**
  * Smoke-test {@link SingleAgentInterviewEvaluator} with a real DB job + LLM (no HTTP server).
  *
- * Prereqs: `.env` with `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, `EVALUATION_PROVIDER` matching.
- * Optional: `EVALUATION_USE_LANGCHAIN_AGENT` is ignored here — this script always uses the single-agent evaluator.
+ * Prereqs: `.env` with `EVALUATION_PROVIDER=single-agent`, `LLM_PROVIDER=openai|anthropic`, and matching API key.
+ * This script always uses the single-agent evaluator.
  * Tool-call trace (model thought + tool + observation preview) is always enabled (`logAgentToolSteps`).
  * Full LLM input logging (`logCompleteEvaluationInput`) is always enabled; the agent user turn is ids-only (transcript/problem/code via tools).
  *
@@ -150,16 +150,7 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ resolvedFromLiveSessionId: jobOrSessionToken, jobId }, null, 2));
   }
 
-  const providerRaw = process.env.EVALUATION_PROVIDER?.toLowerCase().trim() ?? "openai";
-  const llm = LlmClientFactory.tryCreate(process.env);
-
-  if (!llm) {
-    console.error(
-      `No LLM client for EVALUATION_PROVIDER=${providerRaw}. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.`,
-    );
-    await closeAppDatabase();
-    process.exit(1);
-  }
+  const llm = LlmClientFactory.create(process.env);
 
   try {
     const job = await appDao.findJobLiveSessionId(jobId!);

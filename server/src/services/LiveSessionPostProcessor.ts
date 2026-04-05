@@ -50,7 +50,7 @@ export class LiveSessionPostProcessor {
     private readonly files: IAppFileStore,
     private readonly speechAnalysis: SpeechTranscriptionEvaluationOrchestrator,
     private readonly log: FastifyBaseLogger,
-    private readonly srtGenerator: ISrtGenerator | null,
+    private readonly srtGenerator: ISrtGenerator,
   ) {}
 
   /**
@@ -305,7 +305,7 @@ export class LiveSessionPostProcessor {
 
     const forceLocalStt = process.env.LIVE_SESSION_FORCE_WHISPER_STT === "1";
     const liveInterviewerEnabled = session.liveInterviewerEnabled;
-    const useWhisperXPrimary = this.srtGenerator?.providerId === "whisperx";
+    const useWhisperXPrimary = this.srtGenerator.providerId === "whisperx";
     const allowGeminiRealtimeTranscript =
       liveInterviewerEnabled && !forceLocalStt && !useWhisperXPrimary;
     const geminiBundle = allowGeminiRealtimeTranscript
@@ -329,7 +329,7 @@ export class LiveSessionPostProcessor {
           { sessionId, jobId, segments: transcription.segments.length },
           "Live session transcript from Gemini Live realtime (input/output transcription).",
         );
-      } else if (useWhisperXPrimary && this.srtGenerator) {
+      } else if (useWhisperXPrimary) {
         const d = await this.srtGenerator.generate({
           audioFilePath: wavForDiarize,
           audioSource: audioSourceForDiarize,
@@ -371,7 +371,7 @@ export class LiveSessionPostProcessor {
     try {
       await writeE2eSpeechAnalysisArtifacts(this.files, artifactDir, jobId, transcription, evaluation);
 
-      if (transcriptSource === "local_stt" && this.srtGenerator && !diarization) {
+      if (transcriptSource === "local_stt" && !diarization) {
         try {
           const d = await this.srtGenerator.generate({
             audioFilePath: wavForDiarize,

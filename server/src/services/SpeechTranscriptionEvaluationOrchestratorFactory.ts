@@ -6,7 +6,7 @@ import { SpeechToTextServiceFactory } from "./speech-to-text/SpeechToTextService
 import { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscriptionEvaluationOrchestrator.js";
 
 /**
- * Builds {@link SpeechTranscriptionEvaluationOrchestrator} when STT is configured.
+ * Builds {@link SpeechTranscriptionEvaluationOrchestrator} from STT + evaluation configuration.
  */
 export class SpeechTranscriptionEvaluationOrchestratorFactory {
   constructor(
@@ -19,28 +19,11 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
     private readonly db: IAppDao = appDao,
   ) {}
 
-  tryCreate(): SpeechTranscriptionEvaluationOrchestrator | null {
-    const stt = this.speechToTextFactory.create();
-    if (!stt) {
-      return null;
-    }
-    return new SpeechTranscriptionEvaluationOrchestrator(
-      stt,
-      this.evaluationFactory.create(this.evaluationPromptLog),
-      this.db,
-    );
-  }
-
   /**
-   * @throws If no STT implementation is available for the current `STT_PROVIDER` / env (e.g. missing API key).
+   * @throws If `STT_PROVIDER` / API keys do not yield a working speech-to-text service.
    */
-  createOrThrow(): SpeechTranscriptionEvaluationOrchestrator {
+  create(): SpeechTranscriptionEvaluationOrchestrator {
     const stt = this.speechToTextFactory.create();
-    if (!stt) {
-      throw new Error(
-        "Speech-to-text is not configured. Use STT_PROVIDER=remote (default) with OPENAI_API_KEY for Whisper via LlmClient, STT_PROVIDER=local with the whisper CLI, or fix your env.",
-      );
-    }
     return new SpeechTranscriptionEvaluationOrchestrator(
       stt,
       this.evaluationFactory.create(this.evaluationPromptLog),

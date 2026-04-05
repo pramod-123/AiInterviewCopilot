@@ -30,7 +30,7 @@ export class LlmClientSpeechToTextService implements ISpeechToTextService {
     this.providerId = `remote:${this.llm.getProviderId()}`;
   }
 
-  static tryCreate(
+  static create(
     llm: LlmClient,
     env: NodeJS.ProcessEnv = process.env,
   ): LlmClientSpeechToTextService {

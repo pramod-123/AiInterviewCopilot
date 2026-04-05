@@ -8,7 +8,7 @@
  *   npx tsx scripts/compare-evaluators.ts <jobId | liveSessionId> [output.json]
  *   npx tsx scripts/compare-evaluators.ts --session <liveSessionId> [output.json]
  *
- * Uses `EVALUATION_PROVIDER`, API keys, `LLM_EVAL_TEMPERATURE`, `EVALUATION_AGENT_MAX_ITERATIONS` like the app.
+ * Uses `LLM_PROVIDER`, API keys, `LLM_EVAL_TEMPERATURE`, `EVALUATION_AGENT_MAX_ITERATIONS` like the app.
  * Logging flags are off here to keep stdout quiet; results go to the file (and a one-line path on stderr).
  */
 import "dotenv/config";
@@ -167,14 +167,7 @@ async function main(): Promise<void> {
   const job = await appDao.findJobLiveSessionId(jobId);
   const liveSessionId = job?.liveSessionId ?? null;
 
-  const providerRaw = process.env.EVALUATION_PROVIDER?.toLowerCase().trim() ?? "openai";
-  const llm = LlmClientFactory.tryCreate(process.env);
-
-  if (!llm) {
-    throw new Error(
-      `No LLM client for EVALUATION_PROVIDER=${providerRaw}. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.`,
-    );
-  }
+  const llm = LlmClientFactory.create(process.env);
 
   const loader = new PromptLoader();
   const loadPrompts = () => ({

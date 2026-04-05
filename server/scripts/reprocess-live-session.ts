@@ -49,7 +49,7 @@ const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory(
   undefined,
   evaluationFactory,
   log,
-).createOrThrow();
+).create();
 const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
 assertMandatoryInterviewApiConfig(speechAnalysis, visionOpenAiLlm);
 

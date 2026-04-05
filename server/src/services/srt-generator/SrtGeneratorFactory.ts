@@ -19,7 +19,7 @@ export class SrtGeneratorFactory {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
-  create(): ISrtGenerator | null {
+  create(): ISrtGenerator {
     const provider = resolveSrtGeneratorProviderFromEnv(this.env);
     if (provider === "none") {
       throw new Error(
@@ -31,15 +31,7 @@ export class SrtGeneratorFactory {
     }
 
     const stt = new SpeechToTextServiceFactory(this.env).create();
-    if (!stt) {
-      this.log.warn("SRT generator llm_client disabled: no STT provider available.");
-      return null;
-    }
-    const llm = LlmClientFactory.tryCreate(this.env);
-    if (!llm) {
-      this.log.warn("SRT generator llm_client disabled: no LLM client configured.");
-      return null;
-    }
+    const llm = LlmClientFactory.create(this.env);
     return new LlmClientSrtGenerator(stt, llm, this.log);
   }
 }

@@ -47,7 +47,7 @@ export function assertMandatoryInterviewApiConfig(
 
   if (!speechAnalysis) {
     throw new Error(
-      "Interview API requires speech-to-text and evaluation. Set STT_PROVIDER=remote (default) or local, OPENAI_API_KEY for remote Whisper, and EVALUATION_PROVIDER.",
+      "Interview API requires speech-to-text and evaluation. Set STT_PROVIDER=remote (default) or local (not none), OPENAI_API_KEY for remote Whisper, EVALUATION_PROVIDER=llm|single-agent, and LLM_PROVIDER=openai|anthropic with matching API key.",
     );
   }
 

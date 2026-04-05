@@ -26,11 +26,6 @@ function evaluationTemperatureFromEnv(env: NodeJS.ProcessEnv): number {
   return n;
 }
 
-function langChainAgentEnabled(env: NodeJS.ProcessEnv): boolean {
-  const v = env.EVALUATION_USE_LANGCHAIN_AGENT?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
-}
-
 function agentMaxIterationsFromEnv(env: NodeJS.ProcessEnv): number {
   const raw = env.EVALUATION_AGENT_MAX_ITERATIONS?.trim();
   if (!raw) {
@@ -43,27 +38,41 @@ function agentMaxIterationsFromEnv(env: NodeJS.ProcessEnv): number {
   return Math.min(n, 64);
 }
 
+/** Default on; set to 0 / false / no / off to disable. */
 function logAgentToolStepsFromEnv(env: NodeJS.ProcessEnv): boolean {
   const v = env.EVALUATION_LOG_AGENT_STEPS?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "0" || v === "false" || v === "no" || v === "off") {
+    return false;
+  }
+  if (!v) {
+    return true;
+  }
+  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
+/** Default on; set to 0 / false / no / off to disable. */
 function logCompleteEvaluationInputFromEnv(env: NodeJS.ProcessEnv): boolean {
   const v = env.EVALUATION_LOG_COMPLETE_INPUT?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "0" || v === "false" || v === "no" || v === "off") {
+    return false;
+  }
+  if (!v) {
+    return true;
+  }
+  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
 /**
- * Builds an {@link InterviewEvaluator}: {@link InterviewEvaluationService} with a concrete {@link LlmClient}
- * from {@link LlmClientFactory.tryCreate} (uses `EVALUATION_PROVIDER`), or {@link SingleAgentInterviewEvaluator} when
- * `EVALUATION_USE_LANGCHAIN_AGENT=1` and {@link IAppDao} is supplied.
- * Throws if `EVALUATION_PROVIDER` / API keys / database are not configured — the HTTP server should not start.
+ * Builds an {@link InterviewEvaluator}. Set **`EVALUATION_PROVIDER`** to **`llm`** (one-shot {@link InterviewEvaluationService})
+ * or **`single-agent`** ({@link SingleAgentInterviewEvaluator}). Set **`LLM_PROVIDER`** to **`openai`** | **`anthropic`**
+ * with the matching API key (shared with {@link LlmClientFactory} and WhisperX role mapping, not evaluation-specific).
+ * Throws if env / API keys / database are not configured — the HTTP server should not start.
  * See `agents/single-agent-evaluator/AGENT.md` for the tool-based evaluator contract.
  */
 export class InterviewEvaluationServiceFactory {
   constructor(
     private readonly env: NodeJS.ProcessEnv = process.env,
-    private readonly appDb?: IAppDao,
+    private readonly appDb: IAppDao,
   ) {}
 
   create(promptLog?: FastifyBaseLogger): InterviewEvaluator {
@@ -73,48 +82,38 @@ export class InterviewEvaluationServiceFactory {
       userPromptTemplate: loader.loadSync(USER_PROMPT_FILE),
     });
 
-    const raw = this.env.EVALUATION_PROVIDER?.toLowerCase().trim() ?? "openai";
-
-    if (raw === "none") {
+    const configured = this.env.EVALUATION_PROVIDER?.trim();
+    if (!configured) {
       throw new Error(
-        'EVALUATION_PROVIDER cannot be "none" for this API: set EVALUATION_PROVIDER=openai or anthropic and the matching API key.',
+        'EVALUATION_PROVIDER is required in .env: "llm" (one-shot) or "single-agent" (tool agent). Set LLM_PROVIDER=openai|anthropic and the matching API key.',
+      );
+    }
+    const raw = configured.toLowerCase();
+    if (raw !== "llm" && raw !== "single-agent") {
+      throw new Error(
+        `Unsupported EVALUATION_PROVIDER "${raw}". Use exactly "llm" or "single-agent" with LLM_PROVIDER=openai|anthropic.`,
       );
     }
 
-    if (!this.appDb) {
-      throw new Error(
-        "Interview evaluation requires a configured application database (pass IAppDao into InterviewEvaluationServiceFactory).",
+    const llm = LlmClientFactory.create(this.env);
+
+    const base = {
+      provider: llm.getProviderId(),
+      loadPrompts,
+      promptLog,
+      evaluationTemperature: evaluationTemperatureFromEnv(this.env),
+      logAgentToolSteps: logAgentToolStepsFromEnv(this.env),
+      logCompleteEvaluationInput: logCompleteEvaluationInputFromEnv(this.env),
+    };
+
+    if (raw === "single-agent") {
+      return new SingleAgentInterviewEvaluator(
+        llm,
+        this.appDb,
+        base,
+        agentMaxIterationsFromEnv(this.env),
       );
     }
-
-    if (raw === "openai" || raw === "anthropic") {
-      const llm = LlmClientFactory.tryCreate(this.env);
-      if (!llm) {
-        throw new Error(
-          raw === "openai"
-            ? "OPENAI_API_KEY is not set but EVALUATION_PROVIDER=openai."
-            : "ANTHROPIC_API_KEY is not set but EVALUATION_PROVIDER=anthropic.",
-        );
-      }
-      const base = {
-        provider: llm.getProviderId(),
-        loadPrompts,
-        promptLog,
-        evaluationTemperature: evaluationTemperatureFromEnv(this.env),
-        logAgentToolSteps: logAgentToolStepsFromEnv(this.env),
-        logCompleteEvaluationInput: logCompleteEvaluationInputFromEnv(this.env),
-      };
-      if (langChainAgentEnabled(this.env)) {
-        return new SingleAgentInterviewEvaluator(
-          llm,
-          this.appDb,
-          base,
-          agentMaxIterationsFromEnv(this.env),
-        );
-      }
-      return new InterviewEvaluationService(llm, base, this.appDb);
-    }
-
-    throw new Error(`Unsupported EVALUATION_PROVIDER "${raw}". Use exactly "openai" or "anthropic".`);
+    return new InterviewEvaluationService(llm, base, this.appDb);
   }
 }

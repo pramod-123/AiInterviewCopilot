@@ -4,7 +4,7 @@ import { LocalWhisperSpeechToTextService } from "./LocalWhisperSpeechToTextServi
 import { LlmClientSpeechToTextService } from "./LlmClientSpeechToTextService.js";
 
 /** Canonical `STT_PROVIDER` values (case-insensitive). */
-export type SpeechToTextProviderName = "local" | "remote" | "none";
+export type SpeechToTextProviderName = "local" | "remote";
 
 /**
  * Selects an {@link ISpeechToTextService} implementation from configuration.
@@ -14,28 +14,29 @@ export class SpeechToTextServiceFactory {
   constructor(private readonly env: NodeJS.ProcessEnv = process.env) {}
 
   /**
-   * - **`remote`** (default): OpenAI Whisper via {@link LlmClientFactory.tryCreate}(`"openai"`, env) and {@link LlmClientSpeechToTextService}.
+   * - **`remote`** (default): OpenAI Whisper via {@link OpenAiLlmClient.tryCreate}(env) and {@link LlmClientSpeechToTextService}.
    *   Optional chunking: **`REMOTE_STT_MAX_CHUNK_BYTES`**.
    * - **`local`**: Python `whisper` CLI (`LOCAL_WHISPER_*`).
-   * - **`none`**: no STT (`null`).
    */
-  create(): ISpeechToTextService | null {
+  create(): ISpeechToTextService {
     const mode = this.env.STT_PROVIDER?.toLowerCase().trim() ?? "remote";
     if (mode === "none") {
-      return null;
+      throw new Error(
+        'STT_PROVIDER cannot be "none" for this API. Use "remote" (default) with OPENAI_API_KEY or "local" with the whisper CLI on PATH.',
+      );
     }
     if (mode === "local") {
-      return LocalWhisperSpeechToTextService.tryCreate(this.env);
+      return LocalWhisperSpeechToTextService.create(this.env);
     }
     if (mode === "remote") {
       const llm = OpenAiLlmClient.tryCreate(this.env);
       if (!llm) {
-        return null;
+        throw new Error("OPENAI_API_KEY is not set but STT_PROVIDER=remote.");
       }
-      return LlmClientSpeechToTextService.tryCreate(llm, this.env);
+      return LlmClientSpeechToTextService.create(llm, this.env);
     }
     throw new Error(
-      `Unsupported STT_PROVIDER "${mode}". Use exactly "remote", "local", or "none".`,
+      `Unsupported STT_PROVIDER "${mode}". Use exactly "remote", "local", or omit STT_PROVIDER for remote.`,
     );
   }
 }

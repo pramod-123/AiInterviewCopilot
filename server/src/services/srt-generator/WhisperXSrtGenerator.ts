@@ -31,8 +31,8 @@ function srtGenerationFromWhisperxDiarization(raw: DiarizationPipelineResult): S
 }
 
 /**
- * WhisperX ASR + pyannote diarization. When {@link LlmClientFactory.tryCreate} succeeds (`EVALUATION_PROVIDER`),
- * maps each diarized id (including a single `SPEAKER_xx`) → INTERVIEWER / INTERVIEWEE via sample utterances.
+ * WhisperX ASR + pyannote diarization. When **`LLM_PROVIDER`** is set, {@link LlmClientFactory.create} maps each
+ * diarized id (including a single `SPEAKER_xx`) → INTERVIEWER / INTERVIEWEE via sample utterances.
  */
 export class WhisperXSrtGenerator implements ISrtGenerator {
   readonly providerId = "whisperx" as const;
@@ -47,10 +47,10 @@ export class WhisperXSrtGenerator implements ISrtGenerator {
     if (result.segments.length === 0) {
       return result;
     }
-    const llm = LlmClientFactory.tryCreate(this.env);
-    if (!llm) {
+    if (!this.env.LLM_PROVIDER?.trim()) {
       return result;
     }
+    const llm = LlmClientFactory.create(this.env);
 
     const unique = [
       ...new Set(result.segments.map((s) => s.speakerLabel.trim()).filter((x) => x.length > 0)),

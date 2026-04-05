@@ -79,7 +79,7 @@ export class LocalWhisperSpeechToTextService implements ISpeechToTextService {
     private readonly maxChunkBytes: number,
   ) {}
 
-  static tryCreate(env: NodeJS.ProcessEnv = process.env): LocalWhisperSpeechToTextService | null {
+  static create(env: NodeJS.ProcessEnv = process.env): LocalWhisperSpeechToTextService {
     const exe = env.LOCAL_WHISPER_EXECUTABLE?.trim() || DEFAULT_EXECUTABLE;
     const model = whisperModelFromEnv(env);
     const raw = env.LOCAL_WHISPER_MAX_CHUNK_BYTES?.trim();

@@ -136,7 +136,7 @@ export async function runE2ePipelineCli(argv: string[]): Promise<void> {
     console.log("Limit: first", maxInputDurationSec, "s (quick mode)");
   }
 
-  const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
+  const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().create();
   const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
   assertMandatoryVisionRoi(visionOpenAiLlm);
   const roiDetection = new EditorRoiDetectionService(visionOpenAiLlm);
@@ -357,7 +357,7 @@ export async function finishE2eFromDirCli(argv: string[]): Promise<void> {
 
   const times = manifest.map((m) => m.timestampSec);
   const jobId = `e2e-${path.basename(outDir)}`;
-  const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
+  const speechAnalysis = new SpeechTranscriptionEvaluationOrchestratorFactory().create();
   const { transcription, evaluation } = await speechAnalysis.transcribeAndEvaluate(audioWav, jobId);
   await writeE2eSpeechAnalysisArtifacts(appFileStore, outDir, jobId, transcription, evaluation);
 
@@ -438,7 +438,7 @@ export async function sttEvalE2eCli(argv: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const orchestrator = new SpeechTranscriptionEvaluationOrchestratorFactory().createOrThrow();
+  const orchestrator = new SpeechTranscriptionEvaluationOrchestratorFactory().create();
   const svc = new E2eDirectorySpeechAnalysisService(orchestrator, appFileStore);
 
   console.error("[stt+eval] Transcribing audio.wav (chunked if large)…");

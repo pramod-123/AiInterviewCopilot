@@ -223,8 +223,7 @@ See **[README — HTTP API (summary)](../README.md#http-api-summary)** for the r
 
 ##### `SpeechTranscriptionEvaluationOrchestratorFactory`
 
-- **`tryCreate()`** — used by **`InterviewCopilotServer`**: if `null`, **`registerRoutes()` throws** (API will not start).
-- **`createOrThrow()`** — used by CLIs that require STT.
+- **`create()`** — builds STT + evaluation orchestrator; **`@throws`** if speech-to-text is not configured (used by **`InterviewCopilotServer`** and CLIs).
 
 ##### `mandatoryInterviewApiEnv`
 
@@ -249,8 +248,8 @@ See **[README — HTTP API (summary)](../README.md#http-api-summary)** for the r
 
 ##### Evaluation / STT factories
 
-- **`SpeechToTextServiceFactory`** — `STT_PROVIDER` = **`remote`** (default, OpenAI Whisper only) or **`local`** (Python whisper CLI) or **`none`**; optional **`REMOTE_STT_MAX_CHUNK_BYTES`**; **`OPENAI_STT_MODEL`** on **`OpenAiLlmClient`** for Whisper.
-- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = exactly **`openai`** (default) \| **`anthropic`** \| **`none`**; **`OPENAI_EVAL_MODEL`** / **`ANTHROPIC_EVAL_MODEL`**; builds **`InterviewEvaluationService`** or a skipped evaluator.
+- **`SpeechToTextServiceFactory`** — `STT_PROVIDER` = **`remote`** (default, OpenAI Whisper only) or **`local`** (Python whisper CLI); **`none`** is rejected for the HTTP API; optional **`REMOTE_STT_MAX_CHUNK_BYTES`**; **`OPENAI_STT_MODEL`** on **`OpenAiLlmClient`** for Whisper.
+- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = **`llm`** (one-shot) \| **`single-agent`** (tool agent); **`LLM_PROVIDER`** = **`openai`** \| **`anthropic`** (shared with **`LlmClientFactory`**, WhisperX role mapping); **`OPENAI_EVAL_MODEL`** / **`ANTHROPIC_EVAL_MODEL`**; builds **`InterviewEvaluationService`** or **`SingleAgentInterviewEvaluator`**.
 
 ---
 
@@ -282,10 +281,11 @@ Shared concepts: **`ffmpegExtract`**, **`transcriptFormatting`**, **`editorRoiDe
 | Variable | Role |
 |----------|------|
 | `OPENAI_API_KEY` | Remote STT (Whisper), OpenAI evaluation, vision ROI — required for **HTTP** video API |
-| `ANTHROPIC_API_KEY` | Evaluation only when `EVALUATION_PROVIDER=anthropic` |
-| `STT_PROVIDER` | Exactly **`remote`** (default), **`local`**, or **`none`** |
+| `ANTHROPIC_API_KEY` | Required when `LLM_PROVIDER=anthropic` |
+| `STT_PROVIDER` | **`remote`** (default) or **`local`**; **`none`** rejected for the interview HTTP API |
 | `REMOTE_STT_MAX_CHUNK_BYTES` | Optional; remote STT WAV chunk size cap |
-| `EVALUATION_PROVIDER` | Exactly **`openai`** (default), **`anthropic`**, or **`none`** |
+| `EVALUATION_PROVIDER` | Exactly **`llm`** or **`single-agent`** (evaluator mode) |
+| `LLM_PROVIDER` | Exactly **`openai`** or **`anthropic`** (app-wide chat LLM: eval, `LlmClientFactory`, WhisperX mapping) |
 | `OPENAI_STT_MODEL`, `OPENAI_EVAL_MODEL` | Whisper vs chat/eval/vision model on OpenAI (ROI uses the same chat model as eval) |
 | `ANTHROPIC_EVAL_MODEL` | e.g. `claude-3-5-haiku-20241022` |
 | `WHISPER_MODEL` | Whisper **size** for local CLI + WhisperX (fallback: `LOCAL_WHISPER_MODEL`, `WHISPERX_MODEL`) |

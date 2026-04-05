@@ -72,7 +72,7 @@ export class InterviewCopilotServer {
       this.speechToTextFactory,
       this.evaluationFactory,
       this.app.log,
-    ).tryCreate();
+    ).create();
     const visionOpenAiLlm = OpenAiLlmClient.tryCreate(process.env);
     // ffmpeg/ffprobe/tesseract, STT + eval, vision ROI — fail before accepting uploads.
     assertMandatoryInterviewApiConfig(speechAnalysis, visionOpenAiLlm);
