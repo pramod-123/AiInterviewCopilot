@@ -28,7 +28,11 @@ import {
 const minimalEvalJson = JSON.stringify({
   summary: "Direct evaluator test",
   dimensions: {
-    problem_understanding: { score: 3, rationale: "placeholder" },
+    problem_understanding: {
+      score: 3,
+      evidence_sufficiency: "moderate",
+      rationale_points: [{ claim: "placeholder" }],
+    },
   },
   strengths: ["clear"],
   weaknesses: [],
@@ -88,6 +92,21 @@ describe("formatAgentStepsTrace", () => {
     expect(trace[0]!.observationTruncated).toBe(true);
     expect(trace[0]!.observationPreview.endsWith("…")).toBe(true);
     expect(trace[0]!.observationPreview.length).toBeLessThan(longObs.length);
+  });
+
+  it("does not truncate when maxObservationChars is Infinity", () => {
+    const longObs = "y".repeat(7000);
+    const trace = formatAgentStepsTrace(
+      [
+        {
+          action: { tool: "t", toolInput: {}, log: "" },
+          observation: longObs,
+        },
+      ],
+      Number.POSITIVE_INFINITY,
+    );
+    expect(trace[0]!.observationTruncated).toBe(false);
+    expect(trace[0]!.observationPreview).toBe(longObs);
   });
 });
 

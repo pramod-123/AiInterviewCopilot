@@ -25,7 +25,8 @@ export type {
   InterviewEvaluationAgentToolsFactory as SingleAgentEvaluationToolsFactory,
 } from "./langChainInterviewTools.js";
 
-const AGENT_OBSERVATION_PREVIEW_CHARS = 6000;
+/** Default max characters per tool observation in structured logs (single-agent evaluator). */
+export const DEFAULT_AGENT_TOOL_OBSERVATION_LOG_CHARS = 6000;
 
 /** Human-readable trace of LangChain {@link AgentStep}s (tool calls + model log + observation preview). */
 export type AgentToolStepTrace = {
@@ -38,18 +39,26 @@ export type AgentToolStepTrace = {
   observationTruncated: boolean;
 };
 
-export function formatAgentStepsTrace(steps: AgentStep[]): AgentToolStepTrace[] {
+/**
+ * @param maxObservationChars Per-step cap; use `Infinity` (e.g. from {@link InterviewEvaluationServiceConfig.agentToolObservationMaxChars}) for full text in logs.
+ */
+export function formatAgentStepsTrace(
+  steps: AgentStep[],
+  maxObservationChars: number = DEFAULT_AGENT_TOOL_OBSERVATION_LOG_CHARS,
+): AgentToolStepTrace[] {
+  const limit =
+    Number.isFinite(maxObservationChars) && maxObservationChars > 0
+      ? maxObservationChars
+      : Number.POSITIVE_INFINITY;
   return steps.map((s, i) => {
     const obs = typeof s.observation === "string" ? s.observation : JSON.stringify(s.observation);
-    const truncated = obs.length > AGENT_OBSERVATION_PREVIEW_CHARS;
+    const truncated = obs.length > limit;
     return {
       step: i + 1,
       tool: s.action.tool,
       toolInput: s.action.toolInput,
       agentThought: s.action.log ?? "",
-      observationPreview: truncated
-        ? `${obs.slice(0, AGENT_OBSERVATION_PREVIEW_CHARS)}…`
-        : obs,
+      observationPreview: truncated ? `${obs.slice(0, limit)}…` : obs,
       observationTruncated: truncated,
     };
   });
@@ -221,7 +230,9 @@ export class SingleAgentInterviewEvaluator implements InterviewEvaluator {
   }
 
   private logAgentToolSteps(jobId: string, liveSessionId: string, steps: AgentStep[]): void {
-    const trace = formatAgentStepsTrace(steps);
+    const maxObs =
+      this.config.agentToolObservationMaxChars ?? DEFAULT_AGENT_TOOL_OBSERVATION_LOG_CHARS;
+    const trace = formatAgentStepsTrace(steps, maxObs);
     const payload = {
       jobId,
       liveSessionId,

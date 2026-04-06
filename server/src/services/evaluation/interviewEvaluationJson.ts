@@ -1,16 +1,20 @@
 import type {
-  DimensionEvidenceQuote,
+  ChronologicalTurningPoint,
+  DecisionTraceStep,
   DimensionRationalePoint,
   EvaluationDimension,
+  EvaluationEvidenceQuote,
   InterviewEvaluationPayload,
-  MomentByMomentFeedbackItem,
+  PrepSuggestionItem,
+  RoundOutcomePrediction,
   SpeechCodeConflict,
+  WhatToSayDifferentlyItem,
 } from "../../types/interviewEvaluation.js";
 
 type RawDimension = {
   score?: unknown;
-  rationale?: unknown;
-  evidence?: unknown;
+  evidence_sufficiency?: unknown;
+  evidenceSufficiency?: unknown;
   rationale_points?: unknown;
   rationalePoints?: unknown;
 };
@@ -39,8 +43,8 @@ function parseNumberMs(v: unknown): number | undefined {
   return undefined;
 }
 
-function normalizeEvidenceSource(v: unknown): "speech" | "code" | undefined {
-  if (v === "speech" || v === "code") {
+function normalizeEvidenceSource(v: unknown): EvaluationEvidenceQuote["source"] {
+  if (v === "speech" || v === "code" || v === "question") {
     return v;
   }
   if (typeof v === "string") {
@@ -51,15 +55,18 @@ function normalizeEvidenceSource(v: unknown): "speech" | "code" | undefined {
     if (s === "code" || s === "ocr") {
       return "code";
     }
+    if (s === "question") {
+      return "question";
+    }
   }
   return undefined;
 }
 
-function parseDimensionEvidenceQuotes(v: unknown): DimensionEvidenceQuote[] | undefined {
+function parseEvidenceQuotes(v: unknown): EvaluationEvidenceQuote[] | undefined {
   if (!Array.isArray(v)) {
     return undefined;
   }
-  const out: DimensionEvidenceQuote[] = [];
+  const out: EvaluationEvidenceQuote[] = [];
   for (const item of v) {
     if (!isRecord(item)) {
       continue;
@@ -77,7 +84,7 @@ function parseDimensionEvidenceQuotes(v: unknown): DimensionEvidenceQuote[] | un
       continue;
     }
     const src = normalizeEvidenceSource(item.source);
-    const row: DimensionEvidenceQuote = { quote, timestampMs: Math.round(ts) };
+    const row: EvaluationEvidenceQuote = { quote, timestampMs: Math.round(ts) };
     if (src) {
       row.source = src;
     }
@@ -95,12 +102,12 @@ function parseRationalePoints(v: unknown): DimensionRationalePoint[] | undefined
     if (!isRecord(item)) {
       continue;
     }
-    const text = pickStr(item, "text");
-    if (!text) {
+    const claim = pickStr(item, "claim", "text");
+    if (!claim) {
       continue;
     }
-    const evidence = parseDimensionEvidenceQuotes(item.evidence);
-    const point: DimensionRationalePoint = { text };
+    const evidence = parseEvidenceQuotes(item.evidence);
+    const point: DimensionRationalePoint = { claim };
     if (evidence) {
       point.evidence = evidence;
     }
@@ -119,6 +126,82 @@ function pickStr(obj: Record<string, unknown>, ...keys: string[]): string {
   return "";
 }
 
+function normalizeEvidenceSufficiency(v: unknown): EvaluationDimension["evidenceSufficiency"] | undefined {
+  if (v === "limited" || v === "moderate" || v === "strong") {
+    return v;
+  }
+  if (typeof v === "string") {
+    const s = v.toLowerCase().trim();
+    if (s === "limited" || s === "moderate" || s === "strong") {
+      return s;
+    }
+  }
+  return undefined;
+}
+
+function normalizeRoundOutcome(v: unknown): RoundOutcomePrediction | undefined {
+  if (
+    v === "strong_pass" ||
+    v === "pass" ||
+    v === "borderline" ||
+    v === "weak_no_pass"
+  ) {
+    return v;
+  }
+  if (typeof v === "string") {
+    const s = v.toLowerCase().trim().replace(/\s+/g, "_");
+    if (
+      s === "strong_pass" ||
+      s === "pass" ||
+      s === "borderline" ||
+      s === "weak_no_pass"
+    ) {
+      return s as RoundOutcomePrediction;
+    }
+  }
+  return undefined;
+}
+
+function parsePrepSuggestions(v: unknown): PrepSuggestionItem[] | undefined {
+  if (!Array.isArray(v)) {
+    return undefined;
+  }
+  const out: PrepSuggestionItem[] = [];
+  for (const item of v) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const weakness = pickStr(item, "weakness");
+    const prescription = pickStr(item, "prescription");
+    const goal = pickStr(item, "goal");
+    if (!weakness && !prescription && !goal) {
+      continue;
+    }
+    out.push({ weakness, prescription, goal });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function parseWhatToSayDifferently(v: unknown): WhatToSayDifferentlyItem[] | undefined {
+  if (!Array.isArray(v)) {
+    return undefined;
+  }
+  const out: WhatToSayDifferentlyItem[] = [];
+  for (const item of v) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const situation = pickStr(item, "situation");
+    const betterPhrasing = pickStr(item, "better_phrasing", "betterPhrasing");
+    const whyItHelps = pickStr(item, "why_it_helps", "whyItHelps");
+    if (!situation && !betterPhrasing && !whyItHelps) {
+      continue;
+    }
+    out.push({ situation, betterPhrasing, whyItHelps });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function parseSpeechCodeConflicts(v: unknown): SpeechCodeConflict[] | undefined {
   if (!Array.isArray(v)) {
     return undefined;
@@ -128,11 +211,19 @@ function parseSpeechCodeConflicts(v: unknown): SpeechCodeConflict[] | undefined 
     if (!isRecord(item)) {
       continue;
     }
+    const speechEvidence =
+      parseEvidenceQuotes(item.speech_evidence) ??
+      parseEvidenceQuotes(item.speechEvidence) ??
+      [];
+    const codeEvidence =
+      parseEvidenceQuotes(item.code_evidence) ??
+      parseEvidenceQuotes(item.codeEvidence) ??
+      [];
     out.push({
       timeRange: pickStr(item, "time_range", "timeRange"),
       issue: pickStr(item, "issue"),
-      speechEvidence: pickStr(item, "speech_evidence", "speechEvidence"),
-      codeEvidence: pickStr(item, "code_evidence", "codeEvidence"),
+      speechEvidence,
+      codeEvidence,
       whyItMatters: pickStr(item, "why_it_matters", "whyItMatters"),
       coachingAdvice: pickStr(item, "coaching_advice", "coachingAdvice"),
     });
@@ -140,29 +231,49 @@ function parseSpeechCodeConflicts(v: unknown): SpeechCodeConflict[] | undefined 
   return out.length > 0 ? out : undefined;
 }
 
-function parseMomentByMomentFeedback(v: unknown): MomentByMomentFeedbackItem[] | undefined {
+function parseChronologicalTurningPoints(v: unknown): ChronologicalTurningPoint[] | undefined {
   if (!Array.isArray(v)) {
     return undefined;
   }
-  const out: MomentByMomentFeedbackItem[] = [];
+  const out: ChronologicalTurningPoint[] = [];
   for (const item of v) {
     if (!isRecord(item)) {
       continue;
     }
-    const evidence = asStringArray(item.evidence) ?? [];
+    const evidence = parseEvidenceQuotes(item.evidence) ?? [];
     out.push({
       timeRange: pickStr(item, "time_range", "timeRange"),
+      phase: pickStr(item, "phase"),
       observation: pickStr(item, "observation"),
       evidence,
       impact: pickStr(item, "impact"),
-      suggestion: pickStr(item, "suggestion"),
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function parseDecisionTrace(v: unknown): DecisionTraceStep[] | undefined {
+  if (!Array.isArray(v)) {
+    return undefined;
+  }
+  const out: DecisionTraceStep[] = [];
+  for (const item of v) {
+    if (!isRecord(item)) {
+      continue;
+    }
+    const evidenceUsed = parseEvidenceQuotes(item.evidence_used) ?? parseEvidenceQuotes(item.evidenceUsed) ?? [];
+    out.push({
+      step: pickStr(item, "step"),
+      whatWasChecked: pickStr(item, "what_was_checked", "whatWasChecked"),
+      evidenceUsed,
+      conclusion: pickStr(item, "conclusion"),
     });
   }
   return out.length > 0 ? out : undefined;
 }
 
 /**
- * Parses model JSON into {@link InterviewEvaluationPayload}; tolerates minor shape drift.
+ * Parses model JSON into {@link InterviewEvaluationPayload}.
  * Expects snake_case keys per `interview-evaluation-system.md`; accepts camelCase aliases where noted.
  */
 export function parseInterviewEvaluationJson(
@@ -193,18 +304,51 @@ export function parseInterviewEvaluationJson(
   }
 
   const summary = typeof parsed.summary === "string" ? parsed.summary : undefined;
+  const finalOutcome =
+    typeof parsed.final_outcome === "string"
+      ? parsed.final_outcome
+      : typeof parsed.finalOutcome === "string"
+        ? parsed.finalOutcome
+        : undefined;
+  const interviewProcessQuality =
+    typeof parsed.interview_process_quality === "string"
+      ? parsed.interview_process_quality
+      : typeof parsed.interviewProcessQuality === "string"
+        ? parsed.interviewProcessQuality
+        : undefined;
+  const hireSignalSummary =
+    typeof parsed.hire_signal_summary === "string"
+      ? parsed.hire_signal_summary
+      : typeof parsed.hireSignalSummary === "string"
+        ? parsed.hireSignalSummary
+        : undefined;
+  const roundOutcomePrediction =
+    normalizeRoundOutcome(parsed.round_outcome_prediction) ??
+    normalizeRoundOutcome(parsed.roundOutcomePrediction);
+
   const strengths = asStringArray(parsed.strengths);
   const weaknesses = asStringArray(parsed.weaknesses);
-  const prepSuggestions =
-    asStringArray(parsed.prep_suggestions) ?? asStringArray(parsed.prepSuggestions);
   const missedOpportunities =
     asStringArray(parsed.missed_opportunities) ?? asStringArray(parsed.missedOpportunities);
+  const missedInterviewerFriendlyBehaviors =
+    asStringArray(parsed.missed_interviewer_friendly_behaviors) ??
+    asStringArray(parsed.missedInterviewerFriendlyBehaviors);
+
+  const prepSuggestions =
+    parsePrepSuggestions(parsed.prep_suggestions) ?? parsePrepSuggestions(parsed.prepSuggestions);
+  const whatToSayDifferently =
+    parseWhatToSayDifferently(parsed.what_to_say_differently) ??
+    parseWhatToSayDifferently(parsed.whatToSayDifferently);
   const speechCodeConflicts =
     parseSpeechCodeConflicts(parsed.speech_code_conflicts) ??
     parseSpeechCodeConflicts(parsed.speechCodeConflicts);
-  const momentByMomentFeedback =
-    parseMomentByMomentFeedback(parsed.moment_by_moment_feedback) ??
-    parseMomentByMomentFeedback(parsed.momentByMomentFeedback);
+  const chronologicalTurningPoints =
+    parseChronologicalTurningPoints(parsed.chronological_turning_points) ??
+    parseChronologicalTurningPoints(parsed.chronologicalTurningPoints);
+  const alternativeStrongerPath =
+    asStringArray(parsed.alternative_stronger_path) ?? asStringArray(parsed.alternativeStrongerPath);
+  const decisionTrace =
+    parseDecisionTrace(parsed.decision_trace) ?? parseDecisionTrace(parsed.decisionTrace);
 
   let dimensions: InterviewEvaluationPayload["dimensions"];
   if (isRecord(parsed.dimensions)) {
@@ -215,27 +359,20 @@ export function parseInterviewEvaluationJson(
       }
       const d = val as RawDimension;
       const score = typeof d.score === "number" ? d.score : Number(d.score);
-      let rationale = typeof d.rationale === "string" ? d.rationale : "";
       if (!Number.isFinite(score)) {
         continue;
       }
-      const evidence = asStringArray(d.evidence);
+      const evidenceSufficiency =
+        normalizeEvidenceSufficiency(d.evidence_sufficiency) ??
+        normalizeEvidenceSufficiency(d.evidenceSufficiency) ??
+        "limited";
       const rationalePoints =
-        parseRationalePoints(d.rationale_points) ?? parseRationalePoints(d.rationalePoints);
-      if (rationalePoints && rationalePoints.length > 0 && !rationale.trim()) {
-        rationale = rationalePoints.map((p) => p.text).join("\n\n");
-      }
-      const dim: EvaluationDimension = {
+        parseRationalePoints(d.rationale_points) ?? parseRationalePoints(d.rationalePoints) ?? [];
+      dimensions[key] = {
         score,
-        rationale,
+        evidenceSufficiency,
+        rationalePoints,
       };
-      if (evidence && evidence.length > 0) {
-        dim.evidence = evidence;
-      }
-      if (rationalePoints && rationalePoints.length > 0) {
-        dim.rationalePoints = rationalePoints;
-      }
-      dimensions[key] = dim;
     }
     if (Object.keys(dimensions).length === 0) {
       dimensions = undefined;
@@ -247,12 +384,20 @@ export function parseInterviewEvaluationJson(
     provider: providerId,
     model: modelId,
     summary,
+    finalOutcome,
+    interviewProcessQuality,
+    hireSignalSummary,
+    roundOutcomePrediction,
     dimensions,
     strengths,
     weaknesses,
-    prepSuggestions,
     missedOpportunities,
+    missedInterviewerFriendlyBehaviors,
+    whatToSayDifferently,
+    prepSuggestions,
     speechCodeConflicts,
-    momentByMomentFeedback,
+    chronologicalTurningPoints,
+    alternativeStrongerPath,
+    decisionTrace,
   };
 }

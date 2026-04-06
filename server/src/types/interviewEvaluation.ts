@@ -1,47 +1,62 @@
-/** One quoted evidence row tied to a moment in the recording (ms from recording start). */
-export type DimensionEvidenceQuote = {
+/** Evidence row tied to a moment in the recording (ms from recording start). */
+export type EvaluationEvidenceQuote = {
   quote: string;
   timestampMs: number;
-  source?: "speech" | "code";
+  source?: "speech" | "code" | "question";
 };
 
-/** One bullet of assessment under a dimension, optionally backed by timestamped quotes. */
+/** One scored claim under a rubric dimension. */
 export type DimensionRationalePoint = {
-  text: string;
-  evidence?: DimensionEvidenceQuote[];
+  claim: string;
+  evidence?: EvaluationEvidenceQuote[];
 };
 
-/**
- * One rubric dimension.
- * Prefer {@link DimensionRationalePoint} via `rationalePoints` (see `interview-evaluation-system.md`).
- * `rationale` is kept as a flattened summary for backward compatibility and simple UIs.
- */
+export type EvidenceSufficiency = "limited" | "moderate" | "strong";
+
+/** One rubric dimension (see `interview-evaluation-system.md`). */
 export type EvaluationDimension = {
   score: number;
-  rationale: string;
-  /** Legacy flat strings from older model outputs. */
-  evidence?: string[];
-  /** Structured rationale bullets with timestamped evidence. */
-  rationalePoints?: DimensionRationalePoint[];
+  evidenceSufficiency: EvidenceSufficiency;
+  rationalePoints: DimensionRationalePoint[];
 };
 
-/** Model output: `speech_code_conflicts` entries (snake_case in JSON). */
+export type RoundOutcomePrediction = "strong_pass" | "pass" | "borderline" | "weak_no_pass";
+
 export type SpeechCodeConflict = {
   timeRange: string;
   issue: string;
-  speechEvidence: string;
-  codeEvidence: string;
+  speechEvidence: EvaluationEvidenceQuote[];
+  codeEvidence: EvaluationEvidenceQuote[];
   whyItMatters: string;
   coachingAdvice: string;
 };
 
-/** Model output: `moment_by_moment_feedback` entries. */
-export type MomentByMomentFeedbackItem = {
+/** `chronological_turning_points` entry (replaces legacy moment-by-moment feedback). */
+export type ChronologicalTurningPoint = {
   timeRange: string;
+  phase: string;
   observation: string;
-  evidence: string[];
+  evidence: EvaluationEvidenceQuote[];
   impact: string;
-  suggestion: string;
+};
+
+export type PrepSuggestionItem = {
+  weakness: string;
+  prescription: string;
+  goal: string;
+};
+
+export type WhatToSayDifferentlyItem = {
+  situation: string;
+  betterPhrasing: string;
+  whyItHelps: string;
+};
+
+export type DecisionTraceStep = {
+  step: string;
+  whatWasChecked: string;
+  evidenceUsed: EvaluationEvidenceQuote[];
+  conclusion: string;
 };
 
 /** Token usage from an LLM evaluation call. */
@@ -62,17 +77,22 @@ export type InterviewEvaluationPayload = {
   provider?: string;
   model?: string | null;
   summary?: string;
+  finalOutcome?: string;
+  interviewProcessQuality?: string;
+  hireSignalSummary?: string;
+  roundOutcomePrediction?: RoundOutcomePrediction;
   dimensions?: Record<string, EvaluationDimension>;
   strengths?: string[];
   weaknesses?: string[];
-  /** From `prep_suggestions` in model JSON. */
-  prepSuggestions?: string[];
-  /** From `missed_opportunities`. */
   missedOpportunities?: string[];
+  missedInterviewerFriendlyBehaviors?: string[];
+  whatToSayDifferently?: WhatToSayDifferentlyItem[];
+  prepSuggestions?: PrepSuggestionItem[];
   speechCodeConflicts?: SpeechCodeConflict[];
-  momentByMomentFeedback?: MomentByMomentFeedbackItem[];
+  chronologicalTurningPoints?: ChronologicalTurningPoint[];
+  alternativeStrongerPath?: string[];
+  decisionTrace?: DecisionTraceStep[];
   errorMessage?: string;
-  /** Token usage for the evaluation LLM call. */
   tokenUsage?: EvaluationTokenUsage;
 };
 

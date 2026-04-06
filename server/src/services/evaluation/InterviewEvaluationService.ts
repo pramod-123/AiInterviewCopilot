@@ -39,6 +39,11 @@ export type InterviewEvaluationServiceConfig = {
    * (env `EVALUATION_LOG_COMPLETE_INPUT` in the factory). When enabled, skips the slimmer prompt-only log to avoid duplicates.
    */
   logCompleteEvaluationInput?: boolean;
+  /**
+   * Single-agent only: max characters logged per tool observation (default 6000).
+   * Set to `Infinity` (via `EVALUATION_LOG_FULL_TOOL_OBSERVATIONS` in the factory) to log full observations on screen / in JSON logs.
+   */
+  agentToolObservationMaxChars?: number;
   /** Sampling temperature for the rubric evaluation chat call (typical range 0–2). */
   evaluationTemperature: number;
 };

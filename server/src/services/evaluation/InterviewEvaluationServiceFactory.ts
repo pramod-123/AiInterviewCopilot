@@ -6,7 +6,10 @@ import {
   type InterviewEvaluator,
   InterviewEvaluationService,
 } from "./InterviewEvaluationService.js";
-import { SingleAgentInterviewEvaluator } from "./SingleAgentInterviewEvaluator.js";
+import {
+  DEFAULT_AGENT_TOOL_OBSERVATION_LOG_CHARS,
+  SingleAgentInterviewEvaluator,
+} from "./SingleAgentInterviewEvaluator.js";
 
 const SYSTEM_PROMPT_FILE = "interview-evaluation-system.md";
 const USER_PROMPT_FILE = "interview-evaluation-user.md";
@@ -50,6 +53,28 @@ function logAgentToolStepsFromEnv(env: NodeJS.ProcessEnv): boolean {
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
+/**
+ * Cap for each tool observation in single-agent step logs. `EVALUATION_LOG_FULL_TOOL_OBSERVATIONS=1` → no cap.
+ * `EVALUATION_AGENT_OBSERVATION_PREVIEW_CHARS=0` or `-1` also means no cap; otherwise a positive integer sets the limit.
+ */
+function agentToolObservationMaxCharsFromEnv(env: NodeJS.ProcessEnv): number {
+  const full = env.EVALUATION_LOG_FULL_TOOL_OBSERVATIONS?.trim().toLowerCase();
+  if (full === "1" || full === "true" || full === "yes" || full === "on") {
+    return Number.POSITIVE_INFINITY;
+  }
+  const raw = env.EVALUATION_AGENT_OBSERVATION_PREVIEW_CHARS?.trim();
+  if (raw) {
+    const n = Number.parseInt(raw, 10);
+    if (n === 0 || n === -1) {
+      return Number.POSITIVE_INFINITY;
+    }
+    if (Number.isFinite(n) && n > 0) {
+      return n;
+    }
+  }
+  return DEFAULT_AGENT_TOOL_OBSERVATION_LOG_CHARS;
+}
+
 /** Default on; set to 0 / false / no / off to disable. */
 function logCompleteEvaluationInputFromEnv(env: NodeJS.ProcessEnv): boolean {
   const v = env.EVALUATION_LOG_COMPLETE_INPUT?.trim().toLowerCase();
@@ -68,6 +93,9 @@ function logCompleteEvaluationInputFromEnv(env: NodeJS.ProcessEnv): boolean {
  * with the matching API key (shared with {@link LlmClientFactory} and WhisperX role mapping, not evaluation-specific).
  * Throws if env / API keys / database are not configured — the HTTP server should not start.
  * See `agents/single-agent-evaluator/AGENT.md` for the tool-based evaluator contract.
+ *
+ * Full tool observation text in logs (no 6000-char preview cap): set **`EVALUATION_LOG_FULL_TOOL_OBSERVATIONS=1`**,
+ * or **`EVALUATION_AGENT_OBSERVATION_PREVIEW_CHARS=0`**. Requires **`EVALUATION_LOG_AGENT_STEPS`** enabled (default on).
  */
 export class InterviewEvaluationServiceFactory {
   constructor(
@@ -104,6 +132,7 @@ export class InterviewEvaluationServiceFactory {
       evaluationTemperature: evaluationTemperatureFromEnv(this.env),
       logAgentToolSteps: logAgentToolStepsFromEnv(this.env),
       logCompleteEvaluationInput: logCompleteEvaluationInputFromEnv(this.env),
+      agentToolObservationMaxChars: agentToolObservationMaxCharsFromEnv(this.env),
     };
 
     if (raw === "single-agent") {

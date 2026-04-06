@@ -1028,6 +1028,27 @@ body {
   transition: background 0.15s ease;
 }
 
+.sess-moment-phase {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sess-muted, rgba(255, 255, 255, 0.55));
+}
+
+.sess-moment-evidence--structured .sess-moment-ev-ts {
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sess-moment-evidence--structured .sess-moment-ev-src {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
 .sess-moment-range--seekable:hover {
   background: rgba(0, 255, 157, 0.14);
 }
@@ -1285,6 +1306,97 @@ body {
 
 #detailPanel .sess-prep-block li::marker {
   color: var(--primary);
+}
+
+#detailPanel .ic-eval-block,
+#detailPanel .ic-eval-wtsd,
+#detailPanel .ic-eval-conflicts,
+#detailPanel .ic-eval-alt-path,
+#detailPanel .ic-eval-trace {
+  margin-top: 18px;
+}
+
+#detailPanel .ic-eval-block h4,
+#detailPanel .ic-eval-wtsd > h4,
+#detailPanel .ic-eval-conflicts > h4,
+#detailPanel .ic-eval-alt-path > h4,
+#detailPanel .ic-eval-trace > h4 {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+
+#detailPanel .ic-eval-prediction {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+#detailPanel .ic-prep-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-dark);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+#detailPanel .ic-prep-field {
+  margin-bottom: 8px;
+}
+
+#detailPanel .ic-prep-field:last-child {
+  margin-bottom: 0;
+}
+
+#detailPanel .ic-prep-field h4 {
+  font-size: 0.6rem;
+  margin: 0 0 4px;
+}
+
+#detailPanel .ic-eval-wtsd-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-dark);
+}
+
+#detailPanel .ic-eval-conflict-card {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-dark);
+}
+
+#detailPanel .ic-eval-ev-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 10px 0 4px;
+  color: var(--text-dim);
+}
+
+#detailPanel .ic-eval-trace-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+#detailPanel .ic-eval-trace-list li {
+  margin-bottom: 12px;
+}
+
+#detailPanel .ic-dimensions-section .dim-sufficiency-cell {
+  text-transform: capitalize;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  width: 12%;
 }
 
 #detailPanel details {

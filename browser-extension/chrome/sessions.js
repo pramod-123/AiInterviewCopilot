@@ -190,24 +190,46 @@ function formatTranscriptTs(sec) {
   return formatDuration(sec);
 }
 
-/** Matches model output like `0-128140 ms` or `153040-248480 ms`. */
-const MOMENT_MS_RANGE_RE = /^\s*(\d+)\s*-\s*(\d+)\s*(?:ms)?\s*$/i;
+/** Millisecond range from model, e.g. `0-128140 ms`. */
+const MOMENT_MS_RANGE_RE = /^\s*(\d+)\s*-\s*(\d+)\s*ms\s*$/i;
+/** Seconds range per evaluation schema, e.g. `120-165` (start_sec-end_sec). */
+const MOMENT_SEC_RANGE_RE = /^\s*(\d+)\s*-\s*(\d+)\s*$/;
 
 /**
  * @param {string} raw
  * @returns {{ startMs: number; endMs: number } | null}
  */
 function parseMomentMsRange(raw) {
-  const m = raw.trim().match(MOMENT_MS_RANGE_RE);
-  if (!m) {
-    return null;
+  const s = raw.trim();
+  const mMs = s.match(MOMENT_MS_RANGE_RE);
+  if (mMs) {
+    const startMs = Number.parseInt(mMs[1], 10);
+    const endMs = Number.parseInt(mMs[2], 10);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+      return null;
+    }
+    return { startMs, endMs };
   }
-  const startMs = Number.parseInt(m[1], 10);
-  const endMs = Number.parseInt(m[2], 10);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    return null;
+  const mSec = s.match(MOMENT_SEC_RANGE_RE);
+  if (mSec) {
+    const startSec = Number.parseInt(mSec[1], 10);
+    const endSec = Number.parseInt(mSec[2], 10);
+    if (!Number.isFinite(startSec) || !Number.isFinite(endSec)) {
+      return null;
+    }
+    return { startMs: startSec * 1000, endMs: endSec * 1000 };
   }
-  return { startMs, endMs };
+  return null;
+}
+
+/**
+ * @param {number} ms
+ */
+function formatEvidenceClock(ms) {
+  const t = Math.max(0, Math.floor(Number(ms) / 1000));
+  const m = Math.floor(t / 60);
+  const sec = t % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 /**
@@ -515,7 +537,7 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
         transcripts.length > 0 ? `${transcripts.length} segments` : "Transcript ready";
       clearTranscriptSeekHighlight();
       renderTranscriptPanel(transcripts, body.result, badge);
-      renderMomentByMomentPanel(extractMomentByMomentFromInterviewBody(body));
+      renderChronologicalTurningPointsPanel(extractChronologicalTurningPointsFromInterviewBody(body));
       detailInner.replaceChildren();
       rv.renderInterviewGetResponse(detailInner, body, {
         richLayout: true,
@@ -535,7 +557,7 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
         transcripts.length > 0 ? `${transcripts.length} segments` : "—";
       clearTranscriptSeekHighlight();
       renderTranscriptPanel(transcripts, body.result, badge);
-      renderMomentByMomentPanel([]);
+      renderChronologicalTurningPointsPanel([]);
       detailInner.replaceChildren();
       rv.renderStatusMessage(
         detailInner,
@@ -894,7 +916,7 @@ function renderTranscriptPanel(transcripts, resultPayload, fallbackBadge) {
  * @param {unknown} body — GET /api/interviews/:id JSON
  * @returns {Record<string, unknown>[]}
  */
-function extractMomentByMomentFromInterviewBody(body) {
+function extractChronologicalTurningPointsFromInterviewBody(body) {
   if (!body || typeof body !== "object") {
     return [];
   }
@@ -907,7 +929,7 @@ function extractMomentByMomentFromInterviewBody(body) {
     return [];
   }
   const raw =
-    evaluation.momentByMomentFeedback ?? evaluation.moment_by_moment_feedback;
+    evaluation.chronologicalTurningPoints ?? evaluation.chronological_turning_points;
   if (!Array.isArray(raw)) {
     return [];
   }
@@ -917,7 +939,7 @@ function extractMomentByMomentFromInterviewBody(body) {
 /**
  * @param {Record<string, unknown>[]} items
  */
-function renderMomentByMomentPanel(items) {
+function renderChronologicalTurningPointsPanel(items) {
   if (!sessMomentCard || !momentByMomentLines) {
     return;
   }
@@ -934,12 +956,10 @@ function renderMomentByMomentPanel(items) {
         : typeof item.time_range === "string"
           ? item.time_range
           : "";
+    const phase = typeof item.phase === "string" ? item.phase : "";
     const observation = typeof item.observation === "string" ? item.observation : "";
     const impact = typeof item.impact === "string" ? item.impact : "";
-    const suggestion = typeof item.suggestion === "string" ? item.suggestion : "";
-    const evidence = Array.isArray(item.evidence)
-      ? item.evidence.filter((x) => typeof x === "string")
-      : [];
+    const evidence = Array.isArray(item.evidence) ? item.evidence : [];
 
     const article = document.createElement("article");
     article.className = "sess-moment-item";
@@ -956,6 +976,12 @@ function renderMomentByMomentPanel(items) {
       badge.title = "Seek video and transcript to start of this range";
     }
     head.appendChild(badge);
+    if (phase.trim()) {
+      const ph = document.createElement("span");
+      ph.className = "sess-moment-phase";
+      ph.textContent = phase.trim();
+      head.appendChild(ph);
+    }
     article.appendChild(head);
 
     if (observation) {
@@ -967,13 +993,48 @@ function renderMomentByMomentPanel(items) {
 
     if (evidence.length > 0) {
       const ul = document.createElement("ul");
-      ul.className = "sess-moment-evidence";
-      for (const line of evidence) {
-        const li = document.createElement("li");
-        li.textContent = line;
-        ul.appendChild(li);
+      ul.className = "sess-moment-evidence sess-moment-evidence--structured";
+      for (const row of evidence) {
+        if (!row || typeof row !== "object") {
+          continue;
+        }
+        const r = /** @type {Record<string, unknown>} */ (row);
+        const quote = typeof r.quote === "string" ? r.quote : "";
+        const tms =
+          typeof r.timestampMs === "number"
+            ? r.timestampMs
+            : typeof r.timestamp_ms === "number"
+              ? r.timestamp_ms
+              : Number.NaN;
+        const src = typeof r.source === "string" ? r.source : "";
+        if (quote && Number.isFinite(tms)) {
+          const li = document.createElement("li");
+          li.className = "sess-moment-ev-line";
+          const ts = document.createElement("span");
+          ts.className = "sess-moment-ev-ts ic-seek-link";
+          ts.textContent = `[${formatEvidenceClock(tms)}]`;
+          ts.dataset.seekMs = String(Math.round(tms));
+          ts.title = "Seek to this time";
+          const srcSp = document.createElement("span");
+          srcSp.className = "sess-moment-ev-src";
+          srcSp.textContent = src ? `${src} ` : "";
+          li.appendChild(ts);
+          li.appendChild(document.createTextNode(" "));
+          li.appendChild(srcSp);
+          const qSpan = document.createElement("span");
+          qSpan.className = "sess-moment-ev-quote";
+          qSpan.textContent = quote;
+          li.appendChild(qSpan);
+          ul.appendChild(li);
+        } else if (typeof row === "string" && row.trim()) {
+          const li = document.createElement("li");
+          li.textContent = row.trim();
+          ul.appendChild(li);
+        }
       }
-      article.appendChild(ul);
+      if (ul.children.length > 0) {
+        article.appendChild(ul);
+      }
     }
 
     if (impact) {
@@ -983,16 +1044,6 @@ function renderMomentByMomentPanel(items) {
       strong.textContent = "Impact: ";
       p.appendChild(strong);
       p.appendChild(document.createTextNode(impact));
-      article.appendChild(p);
-    }
-
-    if (suggestion) {
-      const p = document.createElement("p");
-      p.className = "sess-moment-meta sess-moment-suggestion";
-      const strong = document.createElement("strong");
-      strong.textContent = "Suggestion: ";
-      p.appendChild(strong);
-      p.appendChild(document.createTextNode(suggestion));
       article.appendChild(p);
     }
 
