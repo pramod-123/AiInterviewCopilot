@@ -675,17 +675,22 @@ body {
   color: var(--primary);
 }
 
+.md-content .md-inline-code.language-java {
+  background: rgba(29, 31, 33, 0.92);
+  border-color: #3e4451;
+}
+
 .md-content .md-fence {
   margin: 0.65em 0;
   padding: 12px 14px;
   border-radius: 10px;
-  background: #2a2a2a;
-  border: 1px solid #3f3f46;
+  background: #1d1f21;
+  border: 1px solid #3e4451;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Plain fences (no language); Prism Xonokai handles `pre[class*="language-"]` + tokens */
+/* Plain fences (no language tag in source) */
 .md-content .md-fence:not([class*="language-"]) {
   background: #050506;
   border-color: var(--border-dark);
@@ -710,12 +715,14 @@ body {
 }
 
 /* Base text for non-token gaps; .token.* from prism-code-theme.css must win on spans */
-.md-content pre.md-fence code.language-java {
-  color: #f8f8f2;
-  text-shadow: none;
+.md-content pre.md-fence code.language-java,
+.md-content .md-inline-code.language-java {
+  color: #c5c8c6;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.3);
 }
 
-.md-content pre.md-fence code.language-java .token {
+.md-content pre.md-fence code.language-java .token,
+.md-content .md-inline-code.language-java .token {
   font-style: normal;
   font-weight: normal;
 }
@@ -1558,6 +1565,40 @@ body {
 
 .ic-dimensions-section .dim-table .dim-notes .dim-ev-quote {
   word-break: break-word;
+}
+
+.ic-dimensions-section .dim-table .dim-notes .dim-ev-quote--code pre.md-fence.dim-ev-fence {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  background: #1d1f21;
+  border: 1px solid #3e4451;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: baseline;
+}
+
+.ic-dimensions-section .dim-table .dim-notes .dim-ev-quote--code pre.dim-ev-fence code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ic-dimensions-section .dim-table .dim-notes .dim-ev-quote--code pre.dim-ev-fence code.language-java {
+  color: #c5c8c6;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.3);
 }
 
 .ic-dimensions-section .dim-table .dim-notes .dim-ev-quote--code .dim-ev-snippet {

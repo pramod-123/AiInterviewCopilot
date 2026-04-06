@@ -1,7 +1,8 @@
 /**
  * Minimal safe Markdown → HTML for extension pages (CSP `script-src 'self'`; Prism is vendored locally).
  * Supports fenced code blocks, inline `code`, paragraphs, line breaks, and single-line # / ## / ### headings.
- * Fenced blocks always use Prism’s Java grammar + Xonokai theme (fence language tags are ignored).
+ * Fenced blocks and inline `backticks` use Prism’s Java grammar + Atom Dark theme (fence language tags are ignored).
+ * Java grammar ships inside `vendor/prism/prism-bundle.min.js`.
  * All text is HTML-escaped except generated wrapper tags.
  */
 (function () {
@@ -20,10 +21,39 @@
   const FENCE_PRISM_LANG = "java";
 
   /**
+   * @returns {{ grammar: object; langId: string } | null}
+   */
+  function resolveFenceGrammar() {
+    const P = typeof window !== "undefined" ? window.Prism : undefined;
+    const langs = P?.languages;
+    if (!langs) {
+      return null;
+    }
+    if (langs.java) {
+      return { grammar: langs.java, langId: "java" };
+    }
+    if (langs.javascript) {
+      return { grammar: langs.javascript, langId: "javascript" };
+    }
+    if (langs.clike) {
+      return { grammar: langs.clike, langId: "clike" };
+    }
+    return null;
+  }
+
+  /**
+   * Highlight every `pre.md-fence code.language-*` under root (markdown + dimension code evidence).
    * @param {HTMLElement} root
    */
   function highlightFenceBlocksInRoot(root) {
-    if (typeof Prism === "undefined" || !root || !Prism.languages?.java) {
+    const P = typeof window !== "undefined" ? window.Prism : undefined;
+    const resolved = resolveFenceGrammar();
+    if (!P || !root || !resolved) {
+      if (typeof console !== "undefined" && console.warn && root && !resolved) {
+        console.warn(
+          "[InterviewCopilotMarkdown] Prism: no java/javascript/clike grammar — code blocks stay plain text.",
+        );
+      }
       return;
     }
     const sel = `pre.md-fence code.language-${FENCE_PRISM_LANG}`;
@@ -36,9 +66,54 @@
         return;
       }
       try {
-        codeEl.innerHTML = Prism.highlight(source, Prism.languages.java, "java");
-      } catch {
-        /* keep escaped plain text */
+        codeEl.innerHTML = P.highlight(source, resolved.grammar, resolved.langId);
+      } catch (err) {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn("[InterviewCopilotMarkdown] Prism.highlight failed", err);
+        }
+      }
+    });
+  }
+
+  /**
+   * Deferred highlight so DOM is settled (and Prism plugins have run).
+   * @param {HTMLElement} root
+   */
+  function highlightFencesIn(root) {
+    queueMicrotask(() => {
+      highlightFenceBlocksInRoot(root);
+      highlightInlineCodeInRoot(root);
+    });
+  }
+
+  /**
+   * Highlight `code.md-inline-code.language-java` (single-line or short inline backticks).
+   * @param {HTMLElement} root
+   */
+  function highlightInlineCodeInRoot(root) {
+    const P = typeof window !== "undefined" ? window.Prism : undefined;
+    const resolved = resolveFenceGrammar();
+    if (!P || !root || !resolved) {
+      return;
+    }
+    const sel = `.md-inline-code.language-${FENCE_PRISM_LANG}`;
+    root.querySelectorAll(sel).forEach((codeEl) => {
+      if (!(codeEl instanceof HTMLElement)) {
+        return;
+      }
+      if (codeEl.querySelector(".token")) {
+        return;
+      }
+      const source = codeEl.textContent ?? "";
+      if (!source.trim()) {
+        return;
+      }
+      try {
+        codeEl.innerHTML = P.highlight(source, resolved.grammar, resolved.langId);
+      } catch (err) {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn("[InterviewCopilotMarkdown] Prism.highlight (inline) failed", err);
+        }
       }
     });
   }
@@ -63,7 +138,7 @@
         res += escapeHtml(text.slice(j));
         break;
       }
-      res += "<code class=\"md-inline-code\">";
+      res += `<code class="md-inline-code language-${FENCE_PRISM_LANG}">`;
       res += escapeHtml(text.slice(j + 1, k));
       res += "</code>";
       i = k + 1;
@@ -196,6 +271,7 @@
     }
     injectTrustedHtml(el, html);
     highlightFenceBlocksInRoot(el);
+    highlightInlineCodeInRoot(el);
   }
 
   /**
@@ -211,6 +287,7 @@
     const lines = text.split("\n");
     const html = lines.map((line) => renderInline(line)).join("<br />");
     injectTrustedHtml(el, html);
+    highlightInlineCodeInRoot(el);
   }
 
   window.InterviewCopilotMarkdown = {
@@ -218,5 +295,6 @@
     appendMarkdownToElement,
     appendInlineMarkdownToElement,
     escapeHtml,
+    highlightFencesIn,
   };
 })();

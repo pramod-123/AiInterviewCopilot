@@ -114,7 +114,20 @@
       const quoteSpan = document.createElement("span");
       quoteSpan.className = "dim-ev-quote";
       const srcLower = src.trim().toLowerCase();
-      if (srcLower === "code" || srcLower === "ocr") {
+      if (srcLower === "code") {
+        quoteSpan.classList.add("dim-ev-quote--code", "md-content");
+        const preEl = document.createElement("pre");
+        preEl.className = "md-fence language-java dim-ev-fence";
+        const codeEl = document.createElement("code");
+        codeEl.className = "language-java";
+        codeEl.textContent = quote;
+        preEl.appendChild(codeEl);
+        quoteSpan.appendChild(preEl);
+        const md = window.InterviewCopilotMarkdown;
+        if (md && typeof md.highlightFencesIn === "function") {
+          md.highlightFencesIn(quoteSpan);
+        }
+      } else if (srcLower === "ocr") {
         quoteSpan.classList.add("dim-ev-quote--code");
         const codeEl = document.createElement("code");
         codeEl.className = "dim-ev-snippet";
@@ -1009,6 +1022,11 @@
     pre.textContent = JSON.stringify(payload, null, 2);
     details.appendChild(pre);
     root.appendChild(details);
+
+    const mdSweep = window.InterviewCopilotMarkdown;
+    if (mdSweep && typeof mdSweep.highlightFencesIn === "function") {
+      mdSweep.highlightFencesIn(root);
+    }
   }
 
   /**

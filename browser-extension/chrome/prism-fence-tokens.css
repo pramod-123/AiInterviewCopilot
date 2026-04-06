@@ -1,192 +1,243 @@
-/* Xonokai-style Prism tokens, scoped to fenced blocks (beats inherited panel colours). */
-.md-content pre.md-fence code .token.namespace {
+/* Atom Dark–style Prism tokens (prism-themes), scoped to fences + inline `code` (beats inherited panel colours). */
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.namespace {
   opacity: 0.7;
 }
 
-.md-content pre.md-fence code .token.cdata,
-.md-content pre.md-fence code .token.comment,
-.md-content pre.md-fence code .token.doctype,
-.md-content pre.md-fence code .token.prolog {
-  color: #6f705e;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.comment,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.prolog,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.doctype,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.cdata {
+  color: #7c7c7c;
 }
 
-.md-content pre.md-fence code .token.boolean,
-.md-content pre.md-fence code .token.number,
-.md-content pre.md-fence code .token.operator {
-  color: #a77afe;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.punctuation {
+  color: #c5c8c6;
 }
 
-.md-content pre.md-fence code .token.attr-name,
-.md-content pre.md-fence code .token.string {
-  color: #e6d06c;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.property,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.keyword,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.tag {
+  color: #96cbfe;
 }
 
-.md-content pre.md-fence code.language-css .token.string,
-.md-content pre.md-fence code .style .token.string,
-.md-content pre.md-fence code .token.entity,
-.md-content pre.md-fence code .token.url {
-  color: #e6d06c;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.class-name {
+  color: #ffffb6;
 }
 
-.md-content pre.md-fence code .token.inserted,
-.md-content pre.md-fence code .token.selector {
-  color: #a6e22d;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.boolean,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.constant {
+  color: #99cc99;
 }
 
-.md-content pre.md-fence code .token.atrule,
-.md-content pre.md-fence code .token.attr-value,
-.md-content pre.md-fence code .token.deleted,
-.md-content pre.md-fence code .token.important,
-.md-content pre.md-fence code .token.keyword {
-  color: #ef3b7d;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.symbol,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.deleted {
+  color: #f92672;
 }
 
-.md-content pre.md-fence code .token.regex,
-.md-content pre.md-fence code .token.statement {
-  color: #76d9e6;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.number {
+  color: #ff73fd;
 }
 
-.md-content pre.md-fence code .token.placeholder,
-.md-content pre.md-fence code .token.variable {
-  color: #fff;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.selector,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-name,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.string,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.char,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.builtin,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.inserted {
+  color: #a8ff60;
 }
 
-.md-content pre.md-fence code .token.bold,
-.md-content pre.md-fence code .token.important,
-.md-content pre.md-fence code .token.statement {
-  font-weight: 700;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.variable,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.placeholder {
+  color: #c6c5fe;
 }
 
-.md-content pre.md-fence code .token.punctuation {
-  color: #bebec5;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.operator {
+  color: #ededed;
 }
 
-.md-content pre.md-fence code .token.entity {
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.entity {
+  color: #ffffb6;
   cursor: help;
 }
 
-.md-content pre.md-fence code .token.italic {
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.url {
+  color: #96cbfe;
+}
+
+.md-content pre.md-fence code.language-css .token.string,
+.md-content pre.md-fence code .style .token.string {
+  color: #87c38a;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.atrule,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-value {
+  color: #f9ee98;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.function {
+  color: #dad085;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.regex {
+  color: #e9c062;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important {
+  color: #fd971f;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.bold,
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important {
+  font-weight: 700;
+}
+
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.italic {
   font-style: italic;
 }
 
-.md-content pre.md-fence code .token.class-name {
-  color: #a6e22d;
-}
-
-.md-content pre.md-fence code .token.function {
-  color: #a6e22d;
+.md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.statement {
+  color: #c5c8c6;
 }
 
 /*
- * Extension UI: `#detailPanel` / `#resultSection` rules use IDs. Any `… code { color: … }` with an ID
- * outranks `.md-content … .token.*` (no ID) on the `code` element; some browsers then resolve token
- * spans inconsistently vs inherited text. Repeat token styling with the same ID + class chain so
+ * Extension UI: `#detailPanel` / `#resultSection` rules use IDs. Repeat token styling with the same ID + class chain so
  * `.token` colours always win inside those panels.
  */
-#detailPanel .md-content pre.md-fence code .token.namespace,
-#resultSection .md-content pre.md-fence code .token.namespace {
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.namespace,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.namespace {
   opacity: 0.7;
 }
 
-#detailPanel .md-content pre.md-fence code .token.cdata,
-#detailPanel .md-content pre.md-fence code .token.comment,
-#detailPanel .md-content pre.md-fence code .token.doctype,
-#detailPanel .md-content pre.md-fence code .token.prolog,
-#resultSection .md-content pre.md-fence code .token.cdata,
-#resultSection .md-content pre.md-fence code .token.comment,
-#resultSection .md-content pre.md-fence code .token.doctype,
-#resultSection .md-content pre.md-fence code .token.prolog {
-  color: #6f705e;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.comment,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.prolog,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.doctype,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.cdata,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.comment,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.prolog,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.doctype,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.cdata {
+  color: #7c7c7c;
 }
 
-#detailPanel .md-content pre.md-fence code .token.boolean,
-#detailPanel .md-content pre.md-fence code .token.number,
-#detailPanel .md-content pre.md-fence code .token.operator,
-#resultSection .md-content pre.md-fence code .token.boolean,
-#resultSection .md-content pre.md-fence code .token.number,
-#resultSection .md-content pre.md-fence code .token.operator {
-  color: #a77afe;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.punctuation,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.punctuation {
+  color: #c5c8c6;
 }
 
-#detailPanel .md-content pre.md-fence code .token.attr-name,
-#detailPanel .md-content pre.md-fence code .token.string,
-#resultSection .md-content pre.md-fence code .token.attr-name,
-#resultSection .md-content pre.md-fence code .token.string {
-  color: #e6d06c;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.property,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.keyword,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.tag,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.property,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.keyword,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.tag {
+  color: #96cbfe;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.class-name,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.class-name {
+  color: #ffffb6;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.boolean,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.constant,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.boolean,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.constant {
+  color: #99cc99;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.symbol,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.deleted,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.symbol,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.deleted {
+  color: #f92672;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.number,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.number {
+  color: #ff73fd;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.selector,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-name,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.string,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.char,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.builtin,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.inserted,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.selector,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-name,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.string,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.char,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.builtin,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.inserted {
+  color: #a8ff60;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.variable,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.placeholder,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.variable,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.placeholder {
+  color: #c6c5fe;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.operator,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.operator {
+  color: #ededed;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.entity,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.entity {
+  color: #ffffb6;
+  cursor: help;
+}
+
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.url,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.url {
+  color: #96cbfe;
 }
 
 #detailPanel .md-content pre.md-fence code.language-css .token.string,
 #detailPanel .md-content pre.md-fence code .style .token.string,
-#detailPanel .md-content pre.md-fence code .token.entity,
-#detailPanel .md-content pre.md-fence code .token.url,
 #resultSection .md-content pre.md-fence code.language-css .token.string,
-#resultSection .md-content pre.md-fence code .style .token.string,
-#resultSection .md-content pre.md-fence code .token.entity,
-#resultSection .md-content pre.md-fence code .token.url {
-  color: #e6d06c;
+#resultSection .md-content pre.md-fence code .style .token.string {
+  color: #87c38a;
 }
 
-#detailPanel .md-content pre.md-fence code .token.inserted,
-#detailPanel .md-content pre.md-fence code .token.selector,
-#resultSection .md-content pre.md-fence code .token.inserted,
-#resultSection .md-content pre.md-fence code .token.selector {
-  color: #a6e22d;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.atrule,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-value,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.atrule,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.attr-value {
+  color: #f9ee98;
 }
 
-#detailPanel .md-content pre.md-fence code .token.atrule,
-#detailPanel .md-content pre.md-fence code .token.attr-value,
-#detailPanel .md-content pre.md-fence code .token.deleted,
-#detailPanel .md-content pre.md-fence code .token.important,
-#detailPanel .md-content pre.md-fence code .token.keyword,
-#resultSection .md-content pre.md-fence code .token.atrule,
-#resultSection .md-content pre.md-fence code .token.attr-value,
-#resultSection .md-content pre.md-fence code .token.deleted,
-#resultSection .md-content pre.md-fence code .token.important,
-#resultSection .md-content pre.md-fence code .token.keyword {
-  color: #ef3b7d;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.function,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.function {
+  color: #dad085;
 }
 
-#detailPanel .md-content pre.md-fence code .token.regex,
-#detailPanel .md-content pre.md-fence code .token.statement,
-#resultSection .md-content pre.md-fence code .token.regex,
-#resultSection .md-content pre.md-fence code .token.statement {
-  color: #76d9e6;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.regex,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.regex {
+  color: #e9c062;
 }
 
-#detailPanel .md-content pre.md-fence code .token.placeholder,
-#detailPanel .md-content pre.md-fence code .token.variable,
-#resultSection .md-content pre.md-fence code .token.placeholder,
-#resultSection .md-content pre.md-fence code .token.variable {
-  color: #fff;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important {
+  color: #fd971f;
 }
 
-#detailPanel .md-content pre.md-fence code .token.bold,
-#detailPanel .md-content pre.md-fence code .token.important,
-#detailPanel .md-content pre.md-fence code .token.statement,
-#resultSection .md-content pre.md-fence code .token.bold,
-#resultSection .md-content pre.md-fence code .token.important,
-#resultSection .md-content pre.md-fence code .token.statement {
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.bold,
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.bold,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.important {
   font-weight: 700;
 }
 
-#detailPanel .md-content pre.md-fence code .token.punctuation,
-#resultSection .md-content pre.md-fence code .token.punctuation {
-  color: #bebec5;
-}
-
-#detailPanel .md-content pre.md-fence code .token.entity,
-#resultSection .md-content pre.md-fence code .token.entity {
-  cursor: help;
-}
-
-#detailPanel .md-content pre.md-fence code .token.italic,
-#resultSection .md-content pre.md-fence code .token.italic {
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.italic,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.italic {
   font-style: italic;
 }
 
-#detailPanel .md-content pre.md-fence code .token.class-name,
-#detailPanel .md-content pre.md-fence code .token.function,
-#resultSection .md-content pre.md-fence code .token.class-name,
-#resultSection .md-content pre.md-fence code .token.function {
-  color: #a6e22d;
+#detailPanel .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.statement,
+#resultSection .md-content :is(pre.md-fence code, .md-inline-code.language-java) .token.statement {
+  color: #c5c8c6;
 }

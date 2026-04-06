@@ -638,8 +638,8 @@ body {
   margin: 0.5em 0;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #2a2a2a;
-  border: 1px solid #3f3f46;
+  background: #1d1f21;
+  border: 1px solid #3e4451;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -666,12 +666,14 @@ body {
   color: var(--on-surface);
 }
 
-#resultSection .md-content pre.md-fence code.language-java {
-  color: #f8f8f2;
-  text-shadow: none;
+#resultSection .md-content pre.md-fence code.language-java,
+#resultSection .md-content .md-inline-code.language-java {
+  color: #c5c8c6;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.3);
 }
 
-#resultSection .md-content pre.md-fence code.language-java .token {
+#resultSection .md-content pre.md-fence code.language-java .token,
+#resultSection .md-content .md-inline-code.language-java .token {
   font-style: normal;
   font-weight: normal;
 }
@@ -688,6 +690,11 @@ body {
   background: var(--surface);
   border: 1px solid var(--outline-variant);
   color: var(--primary);
+}
+
+#resultSection .md-content .md-inline-code.language-java {
+  background: #1d1f21;
+  border-color: #3e4451;
 }
 
 #resultSection .md-content--tight .md-p {
@@ -776,6 +783,40 @@ body {
 
 #resultSection .dim-table .dim-notes .dim-ev-quote {
   word-break: break-word;
+}
+
+#resultSection .dim-table .dim-notes .dim-ev-quote--code pre.md-fence.dim-ev-fence {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0;
+  padding: 5px 7px;
+  border-radius: 6px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  background: #1d1f21;
+  border: 1px solid #3e4451;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: baseline;
+}
+
+#resultSection .dim-table .dim-notes .dim-ev-quote--code pre.dim-ev-fence code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#resultSection .dim-table .dim-notes .dim-ev-quote--code pre.dim-ev-fence code.language-java {
+  color: #c5c8c6;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.3);
 }
 
 #resultSection .dim-table .dim-notes .dim-ev-quote--code .dim-ev-snippet {
