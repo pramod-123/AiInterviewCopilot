@@ -429,6 +429,7 @@ Whenever evidence uses `source: "code"`:
 
 - Put **faithful text from the editor at that moment** in the `quote` field.
 - Prefer the **smallest complete block** that supports the claim.
+- For important code-backed claims, you should usually add **brief inline evaluator comments** unless the snippet is already self-explanatory without annotation.
 
 The phrase **smallest complete block** means:
 
@@ -442,7 +443,17 @@ Examples:
 - If the claim is “candidate implemented the main hash-map lookup flow correctly,” include the whole loop or helper method, not three disconnected one-liners.
 - If the claim is “overall structure is organized and readable,” a larger block or full file may be appropriate.
 
-You **may** add your own **inline annotations** inside the code string, for example:
+Inline evaluator comments should be used by default when they make the evidence easier to verify, especially for important code evidence in:
+
+- `coding_accuracy`
+- `debugging_and_validation`
+- `coding_style`
+- `speech_code_conflicts`
+- `chronological_turning_points`
+
+Allowed inline evaluator comment formats:
+
+Examples:
 
 - end-of-line comments like `// evaluator: map stores seen values`
 - block comments like `/* evaluator: missing fallback return */`
@@ -450,8 +461,11 @@ You **may** add your own **inline annotations** inside the code string, for exam
 Rules for inline comments:
 
 - they must be clearly evaluator commentary
-- they must not rewrite or fix the candidate’s code
+- they must use the prefix `evaluator:`
+- they must not rewrite, repair, or complete the candidate’s code
 - they must only clarify why the snippet matters
+- keep them brief and high-signal
+- skip them only when the snippet is already self-explanatory without annotation
 
 ---
 
