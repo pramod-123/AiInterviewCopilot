@@ -299,13 +299,12 @@ export class GeminiLiveWebSocketPlugin {
             mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
             systemInstruction,
             ...(sessionResumption != null ? { sessionResumption } : {}),
-            /** Wait longer before treating the candidate as “done speaking” so the model replies less often and cuts in less. */
             realtimeInputConfig: {
               automaticActivityDetection: {
-                endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
-                startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH,
-                silenceDurationMs: 2000,
-                prefixPaddingMs: 1000,
+                startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+                endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+                silenceDurationMs: 800,
+                prefixPaddingMs: 50,
               },
               turnCoverage: TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
             },
