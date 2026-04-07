@@ -1,14 +1,15 @@
 Job id: {{JOB_ID}}
 
-## Interview problem / prompt (vision-extracted)
+## Interview problem / prompt
 
 Source:
-- Extracted from the FIRST frame of the recording (problem statement panel, constraints, examples, etc.)
-- This is NOT the same as editor OCR in the timeline
+- Provided as `problemStatementText` when available
+- May come from the live session question, persisted payload, or another upstream source
+- Treat this as the official task definition when present
 
 Notes:
-- May be incomplete or empty
-- If present, treat this as the official task definition
+- It may be incomplete or missing
+- If present, use it as the primary definition of what the candidate was expected to solve
 - If missing, infer the task cautiously from speech + code and explicitly mention ambiguity
 
 {{PROBLEM_STATEMENT}}
@@ -21,104 +22,145 @@ The following is a JSON array of time-ordered intervals representing the intervi
 
 Each element contains:
 
-- start (number): start time in milliseconds from recording start
-- end (number): end time in milliseconds (end ≥ start)
-- speech (string): transcript of what the candidate said during this interval (may be empty)
-- frameData (array of strings): progressive OCR snapshots of the code editor
+- `start` (number): start time in milliseconds from recording start
+- `end` (number): end time in milliseconds (`end >= start`)
+- `speech` (string): transcript of what the candidate said during this interval (may be empty)
+- `frameData` (array of strings): progressive editor/code snapshots within this interval, in time order
 
 ---
 
-## CRITICAL: frameData semantics
+## Critical: `frameData` semantics
 
-frameData is NOT a single code file.
+`frameData` is **not** a single code file.
 
-It represents a sequence of snapshots of the editor over time.
+It represents a sequence of editor/code snapshots over time.
 
 Within each interval:
-- Each string is a later snapshot than the previous one
-- Code may be partially written, edited, or overwritten
+- each string is a later snapshot than the previous one
+- code may be partially written, edited, deleted, replaced, or corrected
 
 Across intervals:
-- Code evolves continuously as the candidate types and debugs
+- code evolves continuously as the candidate types, revises, debugs, and refactors
 
 You MUST:
-- Read frameData in order (earlier → later)
-- Track how the code changes over time
-- Distinguish between:
+- read `frameData` in order (earlier → later)
+- track how the code changes over time
+- distinguish between:
   - initial drafts
-  - implementation
+  - implementation progress
   - corrections / debugging
+  - regressions if they happen
+  - the final available implementation state
 
 Do NOT:
-- Merge snapshots into a perfect final program
-- Assume missing code exists
-- Ignore earlier mistakes or later fixes
+- merge snapshots into a perfect final program that never existed on screen
+- assume missing code exists
+- ignore earlier mistakes or later fixes
+- treat an early broken state as the final implementation if the candidate later corrected it
 
 ---
 
-## OCR Accuracy
+## Code snapshot accuracy
 
-OCR is accurate and should be treated as exact code visible on screen.
+`frameData` should be treated as the exact editor/code text visible in the captured timeline.
 
 Rules:
-- Do NOT guess or reconstruct missing code
-- Do NOT infer logic not present in OCR or speech
-- Use exact code snippets when referencing implementation
-- Prefer quoting actual code instead of paraphrasing
+- do NOT guess or reconstruct code that is not present
+- do NOT infer logic not supported by code or speech
+- use exact code snippets when referencing implementation
+- prefer quoting actual code instead of paraphrasing
+- when a claim depends on surrounding context, quote the smallest complete contiguous block that supports the claim rather than isolated one-line fragments
 
 ---
 
 ## How to interpret signals
 
-You are given three sources of truth:
+You are given up to three sources of evidence:
 
 1. Problem statement → what the candidate was asked to solve
-2. Speech → what the candidate is thinking and explaining
-3. Code (frameData) → what the candidate actually implemented
+2. Speech → what the candidate is thinking, explaining, or claiming
+3. Code (`frameData`) → what the candidate actually implemented on screen
 
 When analyzing:
-- Use speech to understand intent and reasoning
-- Use code to verify implementation correctness
-- Use timeline to understand progression
+- use the problem statement to judge intended task requirements when available
+- use speech to understand intent, reasoning, tradeoffs, and communication
+- use code to verify implementation correctness, structure, and progression
+- use the timeline to understand chronology, pivots, corrections, and recovery
 
-If there is a mismatch between speech and code, rely on code for what was actually done.
+If there is a mismatch between speech and code, rely on code for what was actually implemented.
 
 ---
 
 ## Temporal expectation
 
-This is a time-evolving interview, not a final submission.
+This is a time-evolving interview, not just a final submission.
 
 You should:
-- Evaluate how the candidate progresses
-- Identify improvements, mistakes, and corrections over time
-- Consider early confusion vs later clarity
+- evaluate how the candidate progresses across the interview
+- identify improvements, mistakes, corrections, and recoveries over time
+- distinguish early confusion from later clarity
+- score only after considering the full interview arc
+- use the final available code state as the primary basis for `coding_accuracy`, while still using earlier states to judge progression, debugging, adaptability, and strengths
 
 ---
 
 ## Evidence expectation
 
 The assistant MUST:
-- Use exact snippets from:
+- use exact snippets from:
   - speech (quotes)
-  - code (OCR snippets)
-- Tie observations to specific intervals or progression when possible
+  - code (`frameData` snippets)
+- tie observations to specific timestamps or intervals when possible
+- ground important claims in concrete evidence rather than vague summaries
 
-Avoid vague summaries without evidence.
+When using code evidence:
+- prefer the smallest complete contiguous block that makes the point understandable
+- do not rely on disconnected one-line snippets when the claim depends on surrounding logic
+- you may add short inline evaluator comments inside the quoted block only when they clarify why the snippet matters
+
+---
+
+## Timestamp expectations
+
+All times are offsets from the start of the interview recording.
+
+Rules:
+- `start` and `end` are in milliseconds from recording start
+- `timestamp_ms` in your output should also be an offset in milliseconds from recording start
+- `timestamp_ms` begins at `0` and increases until the interview ends
+- `time_range` fields should use seconds from recording start in a consistent string format: `"start_sec-end_sec"`
+- do not use wall-clock timestamps
 
 ---
 
 ## Your response (single JSON object, snake_case keys)
 
-You MUST return one JSON object that includes at least these top-level keys (see system prompt for full schema and dimension definitions):
+You MUST return one JSON object that includes at least these top-level keys (see system prompt for full schema, dimension definitions, and scoring guidance):
 
 - `summary`
-- `dimensions` — every rubric dimension listed in the system prompt, each with `score` and `rationale_points` (array of `{ "text", "evidence": [ { "quote", "timestamp_ms", "source": "speech"|"code" } ] }`; use `[]` for `rationale_points` only when there is nothing to say for that dimension)
-- `strengths`, `weaknesses`, `missed_opportunities`, `prep_suggestions` (arrays of strings)
+- `dimensions` — every rubric dimension listed in the system prompt, each with:
+  - `score`
+  - `evidence_sufficiency`
+  - `rationale_points` (array of `{ "text", "evidence": [ { "quote", "timestamp_ms", "source": "speech"|"code" } ] }`)
+- `strengths`
+- `weaknesses`
+- `missed_opportunities`
+- `missed_interviewer_friendly_behaviors`
+- `prep_suggestions`
+- `practice_prescriptions`
 - `speech_code_conflicts` (array of objects or `[]`)
+- `chronological_turning_points` (array of objects or `[]`)
 - `moment_by_moment_feedback` (array of objects or `[]`)
+- `what_to_say_differently` (array of strings)
+- `better_interview_path`
+- `final_outcome`
+- `interview_process_quality`
+- `hire_signal_summary`
+- `round_outcome_prediction`
 
-Do not omit `missed_opportunities`, `speech_code_conflicts`, or `moment_by_moment_feedback`; use empty arrays when there is nothing to report.
+Do not omit required arrays such as `missed_opportunities`, `missed_interviewer_friendly_behaviors`, `speech_code_conflicts`, `chronological_turning_points`, or `moment_by_moment_feedback`; use empty arrays when there is nothing to report.
+
+If evidence is limited for a dimension, make the narrowest defensible claim, set `evidence_sufficiency` accordingly, and score conservatively.
 
 ---
 
