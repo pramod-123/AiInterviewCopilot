@@ -247,12 +247,11 @@ export class LiveSessionPostProcessor {
         }
       | undefined;
     try {
-      const chunkLog = path.join(this.paths.liveSessionDir(sessionId), "gemini-audio", "chunks.jsonl");
-      if (await this.files.pathExists(chunkLog)) {
+      const voiceChunkCount = await this.db.countLiveVoiceRealtimeAudioChunks(sessionId);
+      if (voiceChunkCount > 0) {
         const workDir = path.join(artifactDir, "gemini-stitch-work");
         const gemini16k = path.join(artifactDir, "gemini-interviewer-16k.wav");
         const stitched = await stitchGeminiInterviewerTimelineWav({
-          paths: this.paths,
           sessionId,
           db: this.db,
           workDir,

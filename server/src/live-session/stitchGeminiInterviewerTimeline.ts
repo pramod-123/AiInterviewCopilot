@@ -1,19 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { IAppDao } from "../dao/IAppDao.js";
-import type { AppPaths } from "../infrastructure/AppPaths.js";
+import type { LiveVoiceRealtimeAudioChunkItem } from "../dao/dto.js";
 import { FfmpegRunner } from "../video-pipeline/ffmpegExtract.js";
-import {
-  geminiAudioDir,
-  mergeGeminiChunkRecordsByFile,
-  pcmS16leMonoDurationMs,
-  readGeminiAudioChunks,
-  readGeminiAudioMeta,
-  type GeminiAudioChunkRecord,
-} from "./geminiLiveAudioCapture.js";
+import { pcmS16leMonoDurationMs, readVoiceRealtimeAudioBridgeMeta, type VoiceRealtimeAudioChunkStitchRow } from "./geminiLiveAudioCapture.js";
+
+/** DB page size for stitch (avoids a single unbounded `findMany`). */
+const VOICE_REALTIME_AUDIO_DB_PAGE_SIZE = 10_000;
 
 /**
- * `bridgeOpenedAtWallMs - firstVideoChunk.createdAt` so Gemini receive-times can be shifted
+ * `bridgeOpenedAtWallMs - firstVideoChunk.createdAt` so model receive-times can be shifted
  * onto the recording timeline (best-effort; assumes capture starts before or near the voice bridge).
  */
 export async function computeRecordingAnchorDeltaMs(
@@ -28,7 +24,17 @@ export async function computeRecordingAnchorDeltaMs(
   return Math.round(bridgeOpenedAtWallMs - createdAt.getTime());
 }
 
-type PlacedChunk = GeminiAudioChunkRecord & {
+/** Optional positive ms: place model PCM earlier on the recording timeline (speaker / delay tuning). */
+function readModelAudioAlignEarlyMs(): number {
+  const raw = process.env.LIVE_SESSION_MODEL_AUDIO_ALIGN_EARLY_MS;
+  if (raw == null || String(raw).trim() === "") {
+    return 0;
+  }
+  const n = Number.parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+type PlacedChunk = VoiceRealtimeAudioChunkStitchRow & {
   offsetOnRecordingMs: number;
   durationMs: number;
 };
@@ -42,44 +48,49 @@ function concatListLine(filePath: string): string {
  * Builds a mono 24 kHz timeline WAV from stored PCM chunks + silence gaps, then 16 kHz output for mixing with STT audio.
  */
 export async function stitchGeminiInterviewerTimelineWav(params: {
-  paths: AppPaths;
   sessionId: string;
   db: IAppDao;
   workDir: string;
   outWav16k: string;
 }): Promise<{ timeline24kPath: string; chunkCount: number; anchorDeltaMs: number } | null> {
-  const { paths, sessionId, db, workDir, outWav16k } = params;
-  const meta = await readGeminiAudioMeta(paths, sessionId);
-  const rawChunks = await readGeminiAudioChunks(paths, sessionId);
-  if (!meta || rawChunks.length === 0) {
+  const { sessionId, db, workDir, outWav16k } = params;
+  const meta = await readVoiceRealtimeAudioBridgeMeta(db, sessionId);
+  if (!meta) {
     return null;
   }
 
-  const gDir = geminiAudioDir(paths, sessionId);
-  const chunksDir = path.join(gDir, "chunks");
-  const mergedByFile = mergeGeminiChunkRecordsByFile(rawChunks);
-  const chunks: GeminiAudioChunkRecord[] = [];
-  for (const c of mergedByFile) {
-    try {
-      const st = await fs.stat(path.join(chunksDir, c.file));
-      const bytes = Math.max(c.bytes, st.size);
-      if (bytes <= 0) {
-        continue;
-      }
-      chunks.push({ ...c, bytes });
-    } catch {
-      /* missing pcm — skip */
+  const rows: LiveVoiceRealtimeAudioChunkItem[] = [];
+  let afterSequence: number | null = null;
+  for (;;) {
+    const page = await db.findLiveVoiceRealtimeAudioChunksPage({
+      sessionId,
+      afterSequence,
+      limit: VOICE_REALTIME_AUDIO_DB_PAGE_SIZE,
+    });
+    if (page.length === 0) {
+      break;
     }
+    rows.push(...page);
+    afterSequence = page[page.length - 1]!.sequence;
   }
-  if (chunks.length === 0) {
+  if (rows.length === 0) {
     return null;
   }
+
+  const chunks: VoiceRealtimeAudioChunkStitchRow[] = rows.map((r) => ({
+    pcm: r.pcmS16le,
+    sampleRate: r.sampleRate,
+    bytes: r.pcmS16le.length,
+    receivedAtWallMs: r.receivedAtWallMs,
+    offsetFromBridgeOpenMs: r.offsetFromBridgeOpenMs,
+  }));
 
   const anchorDeltaMs = await computeRecordingAnchorDeltaMs(db, sessionId, meta.bridgeOpenedAtWallMs);
+  const alignEarlyMs = readModelAudioAlignEarlyMs();
 
   const placed: PlacedChunk[] = chunks.map((c) => ({
     ...c,
-    offsetOnRecordingMs: Math.max(0, c.offsetFromBridgeOpenMs - anchorDeltaMs),
+    offsetOnRecordingMs: Math.max(0, c.offsetFromBridgeOpenMs - anchorDeltaMs - alignEarlyMs),
     durationMs: pcmS16leMonoDurationMs(c.bytes, c.sampleRate),
   }));
   placed.sort((a, b) => a.offsetOnRecordingMs - b.offsetOnRecordingMs);
@@ -113,7 +124,8 @@ export async function stitchGeminiInterviewerTimelineWav(params: {
       cursorMs += gapMs;
     }
 
-    const pcmPath = path.join(gDir, "chunks", c.file);
+    const pcmPath = path.join(workDir, `raw_${segIdx}.pcm`);
+    await fs.writeFile(pcmPath, c.pcm);
     const wavPath = path.join(workDir, `ch_${segIdx++}.wav`);
     await ffmpeg.exec([
       "-f",
@@ -162,7 +174,7 @@ export async function stitchGeminiInterviewerTimelineWav(params: {
 }
 
 /**
- * Mixes tab/mic-derived `audio.wav` with the Gemini interviewer timeline (both 16 kHz mono), then muxes Opus into WebM.
+ * Mixes tab/mic-derived `audio.wav` with the interviewer timeline (both 16 kHz mono), then muxes Opus into WebM.
  */
 export async function mixDialogueAudioAndMuxWebm(params: {
   ffmpeg: FfmpegRunner;
@@ -175,7 +187,7 @@ export async function mixDialogueAudioAndMuxWebm(params: {
   const { ffmpeg, recordingWebm, recordingAudio16kWav, geminiTimeline16kWav, outDialogueWav, outDialogueWebm } =
     params;
 
-  // duration=first: match tab/mic length so mux with `-shortest` does not clip a longer Gemini tail off the WebM.
+  // duration=first: match tab/mic length so mux with `-shortest` does not clip a longer model tail off the WebM.
   await ffmpeg.exec([
     "-i",
     recordingAudio16kWav,

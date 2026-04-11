@@ -74,27 +74,26 @@
   }
 
   /**
+   * Decode model `audio/pcm` base64 (s16le) from Gemini Live.
    * @param {string} base64
    * @param {string} mimeType
-   * @param {AudioContext} ctx
-   * @param {{ nextTime: number }} sched
-   * @param {AudioBufferSourceNode[] | null} activeSources when set, nodes are tracked for interrupt/stop
+   * @returns {{ float32: Float32Array; sampleRate: number } | null}
    */
-  function schedulePcmPlayback(base64, mimeType, ctx, sched, activeSources) {
+  function decodeModelPcmBase64(base64, mimeType) {
     const rateMatch = /rate=(\d+)/i.exec(mimeType || "");
     const sampleRate = rateMatch ? Number.parseInt(rateMatch[1], 10) : 24000;
     let binary;
     try {
       binary = atob(base64);
     } catch {
-      return;
+      return null;
     }
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
     if (bytes.length < 2 || bytes.length % 2 !== 0) {
-      return;
+      return null;
     }
     const samples = bytes.length / 2;
     const float32 = new Float32Array(samples);
@@ -102,24 +101,7 @@
     for (let i = 0; i < samples; i++) {
       float32[i] = view.getInt16(i * 2, true) / 0x8000;
     }
-    const buf = ctx.createBuffer(1, samples, sampleRate);
-    buf.copyToChannel(float32, 0, 0);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    if (activeSources) {
-      activeSources.push(src);
-      src.onended = () => {
-        const idx = activeSources.indexOf(src);
-        if (idx >= 0) {
-          activeSources.splice(idx, 1);
-        }
-      };
-    }
-    const now = ctx.currentTime;
-    const startAt = Math.max(sched.nextTime, now + 0.02);
-    src.start(startAt);
-    sched.nextTime = startAt + buf.duration;
+    return { float32, sampleRate };
   }
 
   /**
@@ -150,25 +132,57 @@
     let closed = false;
     /** @type {WebSocket | null} */
     let ws = null;
+    /** One context for mic + model playback — shared {@link AudioContext} clock reduces capture vs playout drift. */
     /** @type {AudioContext | null} */
-    let captureCtx = null;
+    let audioCtx = null;
     /** @type {ScriptProcessorNode | null} */
     let processor = null;
     /** @type {MediaStreamAudioSourceNode | null} */
     let mediaSource = null;
     /** @type {GainNode | null} */
     let silentSink = null;
-    /** @type {AudioContext | null} */
-    let playbackCtx = null;
-    const playSched = { nextTime: 0 };
-    /** @type {AudioBufferSourceNode[]} Scheduled model audio; cleared on interrupt or teardown. */
-    const activePlaybackSources = [];
+    /** @type {ScriptProcessorNode | null} */
+    let playbackProcessor = null;
+    /** @type {GainNode | null} */
+    let playbackGain = null;
+    /**
+     * Pull-based playback queue (Gemini sends tiny chunks; chaining BufferSources still clicks at seams).
+     * ScriptProcessor drains this continuously for gapless output.
+     */
+    /** @type {Float32Array[]} */
+    const playbackPcmChunks = [];
+    let playbackPcmReadOffset = 0;
     /** @type {ReturnType<typeof setInterval> | null} */
     let pingId = null;
     /** @type {ReturnType<typeof setTimeout> | null} */
     let speakingResetId = null;
     /** Dedupe sends; cleared on upstream reconnect so the model can see the buffer again. */
     let lastEditorPayloadSent = null;
+    /** After `turnComplete` / `generationComplete`, clear "speaking" once the pull queue has drained. */
+    let modelTurnAudioEnded = false;
+
+    /**
+     * @param {Float32Array} dst
+     */
+    function pullFromPlaybackQueue(dst) {
+      const n = dst.length;
+      let w = 0;
+      while (w < n && playbackPcmChunks.length > 0) {
+        const head = playbackPcmChunks[0];
+        const avail = head.length - playbackPcmReadOffset;
+        const take = Math.min(avail, n - w);
+        dst.set(head.subarray(playbackPcmReadOffset, playbackPcmReadOffset + take), w);
+        w += take;
+        playbackPcmReadOffset += take;
+        if (playbackPcmReadOffset >= head.length) {
+          playbackPcmChunks.shift();
+          playbackPcmReadOffset = 0;
+        }
+      }
+      if (w < n) {
+        dst.fill(0, w);
+      }
+    }
 
     function setSpeakingUi(active) {
       if (speakingResetId) {
@@ -206,59 +220,73 @@
       processor = null;
       mediaSource = null;
       silentSink = null;
-      if (captureCtx) {
-        void captureCtx.close().catch(() => {});
-        captureCtx = null;
-      }
     }
 
     /**
      * Gemini Live: on interruption, stop playback immediately and drop queued chunks
      * @see https://ai.google.dev/gemini-api/docs/live-api/capabilities (Voice Activity Detection)
      */
+    function clearPlaybackPcmQueue() {
+      playbackPcmChunks.length = 0;
+      playbackPcmReadOffset = 0;
+    }
+
+    /**
+     * @param {Float32Array} float32 PCM at {@link audioCtx}.sampleRate
+     */
+    function enqueuePlaybackPcm(float32) {
+      if (!float32 || float32.length === 0) {
+        return;
+      }
+      playbackPcmChunks.push(float32);
+    }
+
+    /**
+     * @param {string} base64
+     * @param {string} mimeType
+     */
+    function appendModelPcmChunk(base64, mimeType) {
+      if (!audioCtx) {
+        return;
+      }
+      const decoded = decodeModelPcmBase64(base64, mimeType);
+      if (!decoded) {
+        return;
+      }
+      modelTurnAudioEnded = false;
+      let { float32 } = decoded;
+      const { sampleRate } = decoded;
+      const outRate = audioCtx.sampleRate;
+      if (sampleRate !== outRate) {
+        float32 = resampleFloat32(float32, sampleRate, outRate);
+      }
+      enqueuePlaybackPcm(float32);
+    }
+
     function stopModelPlaybackImmediate() {
-      for (let i = activePlaybackSources.length - 1; i >= 0; i--) {
-        const src = activePlaybackSources[i];
-        try {
-          src.stop(0);
-        } catch {
-          /* already stopped or not started */
-        }
-        try {
-          src.disconnect();
-        } catch {
-          /* ignore */
-        }
-      }
-      activePlaybackSources.length = 0;
-      if (playbackCtx) {
-        playSched.nextTime = playbackCtx.currentTime;
-      } else {
-        playSched.nextTime = 0;
-      }
+      modelTurnAudioEnded = false;
+      clearPlaybackPcmQueue();
       setSpeakingUi(false);
     }
 
     function cleanupPlayback() {
-      for (let i = activePlaybackSources.length - 1; i >= 0; i--) {
-        const src = activePlaybackSources[i];
-        try {
-          src.stop(0);
-        } catch {
-          /* ignore */
-        }
-        try {
-          src.disconnect();
-        } catch {
-          /* ignore */
-        }
+      clearPlaybackPcmQueue();
+      try {
+        playbackProcessor?.disconnect();
+      } catch {
+        /* ignore */
       }
-      activePlaybackSources.length = 0;
-      if (playbackCtx) {
-        void playbackCtx.close().catch(() => {});
-        playbackCtx = null;
+      try {
+        playbackGain?.disconnect();
+      } catch {
+        /* ignore */
       }
-      playSched.nextTime = 0;
+      playbackProcessor = null;
+      playbackGain = null;
+      if (audioCtx) {
+        void audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
     }
 
     function teardown() {
@@ -284,7 +312,7 @@
       }
       ws = null;
       cleanupAudioGraph();
-      cleanupPlayback();
+      cleanupPlayback(); /* closes shared audioCtx */
     }
 
     /** User ended capture — always show idle in the panel. */
@@ -353,23 +381,23 @@
         return;
       }
       try {
-        captureCtx = new AudioContext();
-        await captureCtx.resume();
+        audioCtx = new AudioContext({ latencyHint: "interactive" });
+        await audioCtx.resume();
         const micOnly = new MediaStream(audioTracks.map((t) => t));
-        mediaSource = captureCtx.createMediaStreamSource(micOnly);
-        processor = captureCtx.createScriptProcessor(4096, 1, 1);
-        silentSink = captureCtx.createGain();
+        mediaSource = audioCtx.createMediaStreamSource(micOnly);
+        processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        silentSink = audioCtx.createGain();
         silentSink.gain.value = 0;
         mediaSource.connect(processor);
         processor.connect(silentSink);
-        silentSink.connect(captureCtx.destination);
+        silentSink.connect(audioCtx.destination);
 
         processor.onaudioprocess = (ev) => {
           if (closed || !ws || ws.readyState !== WebSocket.OPEN) {
             return;
           }
           const input = ev.inputBuffer.getChannelData(0);
-          const rate = captureCtx.sampleRate;
+          const rate = audioCtx.sampleRate;
           const resampled = resampleFloat32(input, rate, TARGET_PCM_RATE);
           const pcm = floatTo16BitPCM(resampled);
           const b64 = arrayBufferToBase64(pcm.buffer);
@@ -386,8 +414,22 @@
           }
         };
 
-        playbackCtx = new AudioContext();
-        await playbackCtx.resume();
+        playbackProcessor = audioCtx.createScriptProcessor(2048, 0, 1);
+        playbackGain = audioCtx.createGain();
+        playbackGain.gain.value = 1;
+        playbackProcessor.onaudioprocess = (ev) => {
+          if (closed) {
+            return;
+          }
+          const out = ev.outputBuffer.getChannelData(0);
+          pullFromPlaybackQueue(out);
+          if (modelTurnAudioEnded && playbackPcmChunks.length === 0) {
+            modelTurnAudioEnded = false;
+            setSpeakingUi(false);
+          }
+        };
+        playbackProcessor.connect(playbackGain);
+        playbackGain.connect(audioCtx.destination);
 
         pingId = setInterval(() => {
           if (closed || !ws || ws.readyState !== WebSocket.OPEN) {
@@ -438,15 +480,9 @@
           onStatus("connecting");
         } else if (t === "interrupted" && p.value === true) {
           stopModelPlaybackImmediate();
-        } else if (t === "modelAudio" && typeof p.data === "string" && playbackCtx) {
+        } else if (t === "modelAudio" && typeof p.data === "string" && audioCtx) {
           setSpeakingUi(true);
-          schedulePcmPlayback(
-            p.data,
-            typeof p.mimeType === "string" ? p.mimeType : "",
-            playbackCtx,
-            playSched,
-            activePlaybackSources,
-          );
+          appendModelPcmChunk(p.data, typeof p.mimeType === "string" ? p.mimeType : "");
         } else if (t === "modelText" && typeof p.text === "string" && p.text.trim()) {
           log(`Interviewer: ${p.text.trim().slice(0, 200)}${p.text.length > 200 ? "…" : ""}`);
         } else if (t === "inputTranscription" && typeof p.text === "string" && p.text.trim()) {
@@ -455,7 +491,11 @@
           log(`Voice interviewer error: ${p.message}`);
           onStatus("error", String(p.message));
         } else if (t === "turnComplete" || t === "generationComplete") {
-          setSpeakingUi(false);
+          modelTurnAudioEnded = true;
+          if (playbackPcmChunks.length === 0) {
+            modelTurnAudioEnded = false;
+            setSpeakingUi(false);
+          }
         }
       }
     };

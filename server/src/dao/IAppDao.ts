@@ -13,6 +13,7 @@ import type {
   LiveSessionPatchItem,
   LiveSessionStatus,
   LiveVideoChunkItem,
+  LiveVoiceRealtimeAudioChunkItem,
   SpeechUtteranceInsert,
   SpeechUtteranceItem,
 } from "./dto.js";
@@ -102,6 +103,29 @@ export interface IAppDao {
   deleteLiveSessionById(id: string): Promise<void>;
   /** Most recently updated session id, or null if none. */
   findLatestLiveSessionId(): Promise<string | null>;
+
+  /** Sets `voiceRealtimeBridgeOpenedAtWallMs` on the live session once (first realtime bridge open). */
+  setVoiceRealtimeBridgeOpenedAtIfUnset(sessionId: string, wallMs: number): Promise<void>;
+  /** Millisecond wall time when the voice bridge opened; null if capture never started. */
+  getVoiceRealtimeBridgeOpenedAtWallMs(sessionId: string): Promise<number | null>;
+  insertLiveVoiceRealtimeAudioChunk(params: {
+    sessionId: string;
+    pcmS16le: Buffer;
+    sampleRate: number;
+    receivedAtWallMs: number;
+    offsetFromBridgeOpenMs: number;
+  }): Promise<void>;
+  aggregateMaxLiveVoiceRealtimeAudioChunkSequence(sessionId: string): Promise<number | null>;
+  countLiveVoiceRealtimeAudioChunks(sessionId: string): Promise<number>;
+  /**
+   * Keyset page of realtime voice PCM rows ordered by `sequence` (use `afterSequence` = last row’s `sequence` from the prior page).
+   * `limit` is clamped to 10_000 per query.
+   */
+  findLiveVoiceRealtimeAudioChunksPage(params: {
+    sessionId: string;
+    afterSequence: number | null;
+    limit: number;
+  }): Promise<LiveVoiceRealtimeAudioChunkItem[]>;
 
   // --- Live video chunks ---
   findLiveVideoChunksOrdered(sessionId: string): Promise<LiveVideoChunkItem[]>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  mergeGeminiChunkRecordsByFile,
+  mergeVoiceRealtimeAudioChunkFileRowsByFile,
   parsePcmSampleRateFromMime,
   pcmS16leMonoDurationMs,
 } from "../../src/live-session/geminiLiveAudioCapture.js";
@@ -18,7 +18,7 @@ describe("geminiLiveAudioCapture helpers", () => {
   });
 
   it("merges duplicate jsonl rows for the same pcm file", () => {
-    const merged = mergeGeminiChunkRecordsByFile([
+    const merged = mergeVoiceRealtimeAudioChunkFileRowsByFile([
       { file: "a.pcm", sampleRate: 24000, bytes: 46080, receivedAtWallMs: 2, offsetFromBridgeOpenMs: 100 },
       { file: "a.pcm", sampleRate: 24000, bytes: 1920, receivedAtWallMs: 1, offsetFromBridgeOpenMs: 50 },
       { file: "b.pcm", sampleRate: 24000, bytes: 100, receivedAtWallMs: 3, offsetFromBridgeOpenMs: 200 },
@@ -26,5 +26,15 @@ describe("geminiLiveAudioCapture helpers", () => {
     expect(merged).toHaveLength(2);
     expect(merged[0]).toMatchObject({ file: "a.pcm", offsetFromBridgeOpenMs: 50, bytes: 46080, receivedAtWallMs: 1 });
     expect(merged[1]).toMatchObject({ file: "b.pcm" });
+  });
+
+  it("merges same-file rows taking min offset and max bytes", () => {
+    const merged = mergeVoiceRealtimeAudioChunkFileRowsByFile([
+      { file: "a.pcm", sampleRate: 24000, bytes: 100, receivedAtWallMs: 1, offsetFromBridgeOpenMs: 10 },
+      { file: "a.pcm", sampleRate: 24000, bytes: 200, receivedAtWallMs: 2, offsetFromBridgeOpenMs: 5 },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.bytes).toBe(200);
+    expect(merged[0]?.offsetFromBridgeOpenMs).toBe(5);
   });
 });

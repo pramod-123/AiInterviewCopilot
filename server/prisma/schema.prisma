@@ -113,14 +113,34 @@ model InterviewLiveSession {
   status    LiveSessionStatus @default(ACTIVE)
   /// Problem statement / prompt scraped when recording starts (e.g. LeetCode).
   question  String?
-  /// When false, Gemini Live is not used; transcript is produced offline after session end (local/remote STT).
+  /// When false, realtime voice interviewer is off; transcript is produced offline after session end (local/remote STT).
   liveInterviewerEnabled Boolean @default(true)
+  /// Wall-clock `Date.now()` when the realtime voice-to-model bridge first opened (anchor for chunk offsets).
+  voiceRealtimeBridgeOpenedAtWallMs BigInt?
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
 
-  videoChunks      LiveVideoChunk[]
-  codeSnapshots    LiveCodeSnapshot[]
-  postProcessJob   Job?
+  videoChunks                   LiveVideoChunk[]
+  codeSnapshots                 LiveCodeSnapshot[]
+  postProcessJob                Job?
+  liveVoiceRealtimeAudioChunks  LiveVoiceRealtimeAudioChunk[]
+}
+
+/// Raw PCM (s16le mono) from the live realtime voice model; one row per server receive; ordered by `sequence`.
+model LiveVoiceRealtimeAudioChunk {
+  id                     String               @id @default(uuid())
+  sessionId              String
+  session                InterviewLiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sequence               Int
+  pcmS16le               Bytes
+  sampleRate             Int
+  receivedAtWallMs       BigInt
+  offsetFromBridgeOpenMs Int
+  createdAt              DateTime             @default(now())
+
+  @@unique([sessionId, sequence])
+  @@index([sessionId, sequence])
+  @@map("live_voice_realtime_audio_chunks")
 }
 
 model LiveVideoChunk {

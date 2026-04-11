@@ -6,7 +6,6 @@ import {
   GoogleGenAI,
   type LiveServerMessage,
   type LiveServerSessionResumptionUpdate,
-  MediaResolution,
   Modality,
   type Session,
   type SessionResumptionConfig,
@@ -296,7 +295,6 @@ export class GeminiLiveWebSocketPlugin {
           model,
           config: {
             responseModalities: [Modality.AUDIO],
-            mediaResolution: MediaResolution.MEDIA_RESOLUTION_HIGH,
             systemInstruction,
             ...(sessionResumption != null ? { sessionResumption } : {}),
             realtimeInputConfig: {
@@ -313,7 +311,7 @@ export class GeminiLiveWebSocketPlugin {
             onopen: () => {
               if (bridgeOpenedAtWallMs === null) {
                 bridgeOpenedAtWallMs = Date.now();
-                void initGeminiAudioCapture(paths, sessionId, bridgeOpenedAtWallMs);
+                void initGeminiAudioCapture(this.db, paths, sessionId, bridgeOpenedAtWallMs);
               }
               GeminiLiveWebSocketPlugin.safeSend(socket, { type: "ready", model });
             },
@@ -353,7 +351,7 @@ export class GeminiLiveWebSocketPlugin {
                     p.data.length > 0
                   ) {
                     void appendGeminiModelAudioChunk(
-                      paths,
+                      this.db,
                       sessionId,
                       bridgeOpenedAtWallMs,
                       p.mimeType,

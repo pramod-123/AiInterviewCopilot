@@ -15,6 +15,7 @@ import type {
   LiveSessionPatchItem,
   LiveSessionStatus,
   LiveVideoChunkItem,
+  LiveVoiceRealtimeAudioChunkItem,
   SpeechUtteranceInsert,
   SpeechUtteranceItem,
 } from "./dto.js";
@@ -524,6 +525,83 @@ export class PrismaAppDao implements IAppDao {
       select: { id: true },
     });
     return row?.id ?? null;
+  }
+
+  async setVoiceRealtimeBridgeOpenedAtIfUnset(sessionId: string, wallMs: number): Promise<void> {
+    await this.db.interviewLiveSession.updateMany({
+      where: { id: sessionId, voiceRealtimeBridgeOpenedAtWallMs: null },
+      data: { voiceRealtimeBridgeOpenedAtWallMs: BigInt(wallMs) },
+    });
+  }
+
+  async getVoiceRealtimeBridgeOpenedAtWallMs(sessionId: string): Promise<number | null> {
+    const row = await this.db.interviewLiveSession.findUnique({
+      where: { id: sessionId },
+      select: { voiceRealtimeBridgeOpenedAtWallMs: true },
+    });
+    if (row?.voiceRealtimeBridgeOpenedAtWallMs == null) {
+      return null;
+    }
+    return Number(row.voiceRealtimeBridgeOpenedAtWallMs);
+  }
+
+  async insertLiveVoiceRealtimeAudioChunk(params: {
+    sessionId: string;
+    pcmS16le: Buffer;
+    sampleRate: number;
+    receivedAtWallMs: number;
+    offsetFromBridgeOpenMs: number;
+  }): Promise<void> {
+    const agg = await this.db.liveVoiceRealtimeAudioChunk.aggregate({
+      where: { sessionId: params.sessionId },
+      _max: { sequence: true },
+    });
+    const sequence = (agg._max.sequence ?? -1) + 1;
+    await this.db.liveVoiceRealtimeAudioChunk.create({
+      data: {
+        sessionId: params.sessionId,
+        sequence,
+        pcmS16le: new Uint8Array(params.pcmS16le),
+        sampleRate: params.sampleRate,
+        receivedAtWallMs: BigInt(params.receivedAtWallMs),
+        offsetFromBridgeOpenMs: params.offsetFromBridgeOpenMs,
+      },
+    });
+  }
+
+  async aggregateMaxLiveVoiceRealtimeAudioChunkSequence(sessionId: string): Promise<number | null> {
+    const agg = await this.db.liveVoiceRealtimeAudioChunk.aggregate({
+      where: { sessionId },
+      _max: { sequence: true },
+    });
+    return agg._max.sequence ?? null;
+  }
+
+  async countLiveVoiceRealtimeAudioChunks(sessionId: string): Promise<number> {
+    return this.db.liveVoiceRealtimeAudioChunk.count({ where: { sessionId } });
+  }
+
+  async findLiveVoiceRealtimeAudioChunksPage(params: {
+    sessionId: string;
+    afterSequence: number | null;
+    limit: number;
+  }): Promise<LiveVoiceRealtimeAudioChunkItem[]> {
+    const take = Math.min(Math.max(1, params.limit), 10_000);
+    const rows = await this.db.liveVoiceRealtimeAudioChunk.findMany({
+      where: {
+        sessionId: params.sessionId,
+        ...(params.afterSequence != null ? { sequence: { gt: params.afterSequence } } : {}),
+      },
+      orderBy: { sequence: "asc" },
+      take,
+    });
+    return rows.map((r) => ({
+      sequence: r.sequence,
+      pcmS16le: Buffer.from(r.pcmS16le),
+      sampleRate: r.sampleRate,
+      receivedAtWallMs: Number(r.receivedAtWallMs),
+      offsetFromBridgeOpenMs: r.offsetFromBridgeOpenMs,
+    }));
   }
 
   async findLiveVideoChunksOrdered(sessionId: string): Promise<LiveVideoChunkItem[]> {

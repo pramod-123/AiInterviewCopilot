@@ -2,8 +2,8 @@ import type { IAppDao } from "../dao/IAppDao.js";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 import { SpeechSegment, SpeechTranscription } from "../types/speechTranscription.js";
 import {
-  readGeminiAudioMeta,
   readGeminiRealtimeTranscriptionRecords,
+  readVoiceRealtimeAudioBridgeMeta,
   type GeminiRealtimeTranscriptionRecord,
 } from "./geminiLiveAudioCapture.js";
 import { computeRecordingAnchorDeltaMs } from "./stitchGeminiInterviewerTimeline.js";
@@ -111,15 +111,11 @@ export async function tryLoadGeminiRealtimeForLiveSession(
   if (records.length === 0) {
     return null;
   }
-  const meta = await readGeminiAudioMeta(paths, sessionId);
+  const meta = await readVoiceRealtimeAudioBridgeMeta(db, sessionId);
   if (!meta) {
     return null;
   }
-  const anchorDeltaMs = await computeRecordingAnchorDeltaMs(
-    db,
-    sessionId,
-    meta.bridgeOpenedAtWallMs,
-  );
+  const anchorDeltaMs = await computeRecordingAnchorDeltaMs(db, sessionId, meta.bridgeOpenedAtWallMs);
   const utterances = mergeGeminiRealtimeRecordsToUtterances(records, anchorDeltaMs);
   if (utterances.length === 0) {
     return null;

@@ -48,6 +48,15 @@ export type LiveVideoChunkItem = {
   sizeBytes: number;
 };
 
+/** One PCM blob from the live realtime voice model (DB row), for stitch or APIs. */
+export type LiveVoiceRealtimeAudioChunkItem = {
+  sequence: number;
+  pcmS16le: Buffer;
+  sampleRate: number;
+  receivedAtWallMs: number;
+  offsetFromBridgeOpenMs: number;
+};
+
 export type InterviewAudioItem = {
   jobId: string;
   filePath: string;

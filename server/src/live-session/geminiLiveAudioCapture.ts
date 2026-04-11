@@ -1,20 +1,33 @@
-import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { IAppDao } from "../dao/IAppDao.js";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 
-const META = "meta.json";
-const CHUNKS_DIR = "chunks";
-const CHUNKS_LOG = "chunks.jsonl";
 const REALTIME_TRANSCRIPT_LOG = "realtime-transcriptions.jsonl";
 
-export type GeminiAudioMeta = {
+/** Anchor for chunk offsets (stored on the live session as `voiceRealtimeBridgeOpenedAtWallMs`). */
+export type VoiceRealtimeAudioBridgeMeta = {
   version: 1;
-  /** `Date.now()` when the first upstream Live session opened for this browser WebSocket. */
   bridgeOpenedAtWallMs: number;
 };
 
-export type GeminiAudioChunkRecord = {
+/** @deprecated Use {@link VoiceRealtimeAudioBridgeMeta}. */
+export type GeminiAudioMeta = VoiceRealtimeAudioBridgeMeta;
+
+/** One PCM segment for timeline stitch (from DB). */
+export type VoiceRealtimeAudioChunkStitchRow = {
+  pcm: Buffer;
+  sampleRate: number;
+  bytes: number;
+  receivedAtWallMs: number;
+  offsetFromBridgeOpenMs: number;
+};
+
+/** @deprecated Use {@link VoiceRealtimeAudioChunkStitchRow}. */
+export type GeminiAudioChunkRecord = VoiceRealtimeAudioChunkStitchRow;
+
+/** Legacy on-disk `chunks.jsonl` row (per-file PCM). Used only by migration and tests. */
+export type VoiceRealtimeAudioChunkFileRow = {
   file: string;
   sampleRate: number;
   bytes: number;
@@ -22,7 +35,7 @@ export type GeminiAudioChunkRecord = {
   offsetFromBridgeOpenMs: number;
 };
 
-/** One input/output transcription event from Gemini Live (`inputAudioTranscription` / `outputAudioTranscription`). */
+/** One input/output transcription event (still logged under `gemini-audio/`). */
 export type GeminiRealtimeTranscriptionRecord = {
   role: "input" | "output";
   text: string;
@@ -48,33 +61,31 @@ export function geminiAudioDir(paths: AppPaths, sessionId: string): string {
   return path.join(paths.liveSessionDir(sessionId), "gemini-audio");
 }
 
+export async function readVoiceRealtimeAudioBridgeMeta(
+  db: IAppDao,
+  sessionId: string,
+): Promise<VoiceRealtimeAudioBridgeMeta | null> {
+  const ms = await db.getVoiceRealtimeBridgeOpenedAtWallMs(sessionId);
+  if (ms == null) {
+    return null;
+  }
+  return { version: 1, bridgeOpenedAtWallMs: ms };
+}
+
 /**
- * Call on first Gemini Live `onopen` for this WebSocket (stable anchor across upstream reconnects).
+ * Ensures transcript log directory exists and persists the bridge-open anchor on the session (once).
  */
 export async function initGeminiAudioCapture(
+  db: IAppDao,
   paths: AppPaths,
   sessionId: string,
   bridgeOpenedAtWallMs: number,
 ): Promise<void> {
   const dir = geminiAudioDir(paths, sessionId);
-  await fs.mkdir(path.join(dir, CHUNKS_DIR), { recursive: true });
-  const metaPath = path.join(dir, META);
-  try {
-    await fs.access(metaPath);
-    return;
-  } catch {
-    /* create */
-  }
-  const meta: GeminiAudioMeta = { version: 1, bridgeOpenedAtWallMs };
-  await fs.writeFile(metaPath, JSON.stringify(meta, null, 2), "utf-8");
+  await fs.mkdir(dir, { recursive: true });
+  await db.setVoiceRealtimeBridgeOpenedAtIfUnset(sessionId, bridgeOpenedAtWallMs);
 }
 
-/**
- * Append one model audio blob (raw PCM s16le mono, rate from mimeType).
- */
-/**
- * Append a transcription line (same wall-clock anchor as {@link appendGeminiModelAudioChunk}).
- */
 export async function appendGeminiRealtimeTranscription(
   paths: AppPaths,
   sessionId: string,
@@ -134,16 +145,12 @@ export async function readGeminiRealtimeTranscriptionRecords(
 }
 
 export async function appendGeminiModelAudioChunk(
-  paths: AppPaths,
+  db: IAppDao,
   sessionId: string,
   bridgeOpenedAtWallMs: number,
   mimeType: string,
   base64: string,
 ): Promise<void> {
-  const dir = geminiAudioDir(paths, sessionId);
-  const chunksDir = path.join(dir, CHUNKS_DIR);
-  await fs.mkdir(chunksDir, { recursive: true });
-
   let buf: Buffer;
   try {
     buf = Buffer.from(base64, "base64");
@@ -153,69 +160,25 @@ export async function appendGeminiModelAudioChunk(
   if (buf.length === 0) {
     return;
   }
-
   const sampleRate = parsePcmSampleRateFromMime(mimeType);
   const receivedAtWallMs = Date.now();
   const offsetFromBridgeOpenMs = Math.max(0, receivedAtWallMs - bridgeOpenedAtWallMs);
-
-  /** Unique names avoid parallel `onmessage` handlers racing on readdir-based indices (duplicate jsonl rows / wrong durations). */
-  const name = `${randomUUID()}.pcm`;
-  await fs.writeFile(path.join(chunksDir, name), buf);
-
-  const rec: GeminiAudioChunkRecord = {
-    file: name,
+  await db.insertLiveVoiceRealtimeAudioChunk({
+    sessionId,
+    pcmS16le: buf,
     sampleRate,
-    bytes: buf.length,
     receivedAtWallMs,
     offsetFromBridgeOpenMs,
-  };
-  await fs.appendFile(path.join(dir, CHUNKS_LOG), `${JSON.stringify(rec)}\n`, "utf-8");
-}
-
-export async function readGeminiAudioMeta(
-  paths: AppPaths,
-  sessionId: string,
-): Promise<GeminiAudioMeta | null> {
-  try {
-    const raw = await fs.readFile(path.join(geminiAudioDir(paths, sessionId), META), "utf-8");
-    return JSON.parse(raw) as GeminiAudioMeta;
-  } catch {
-    return null;
-  }
-}
-
-export async function readGeminiAudioChunks(
-  paths: AppPaths,
-  sessionId: string,
-): Promise<GeminiAudioChunkRecord[]> {
-  const dir = geminiAudioDir(paths, sessionId);
-  let raw: string;
-  try {
-    raw = await fs.readFile(path.join(dir, CHUNKS_LOG), "utf-8");
-  } catch {
-    return [];
-  }
-  const out: GeminiAudioChunkRecord[] = [];
-  for (const line of raw.split("\n")) {
-    const t = line.trim();
-    if (!t) {
-      continue;
-    }
-    try {
-      out.push(JSON.parse(t) as GeminiAudioChunkRecord);
-    } catch {
-      /* skip */
-    }
-  }
-  return out;
+  });
 }
 
 /**
- * Collapse duplicate `chunks.jsonl` rows that reference the same file (legacy race) into one record
- * per file: earliest offset, largest declared byte length (on-disk size applied in stitch).
+ * Collapse duplicate legacy `chunks.jsonl` rows for the same file (migration / tests).
  */
-export function mergeGeminiChunkRecordsByFile(chunks: GeminiAudioChunkRecord[]): GeminiAudioChunkRecord[] {
-  const byFile = new Map<string, GeminiAudioChunkRecord>();
+export function mergeVoiceRealtimeAudioChunkFileRowsByFile(
+  chunks: VoiceRealtimeAudioChunkFileRow[],
+): VoiceRealtimeAudioChunkFileRow[] {
+  const byFile = new Map<string, VoiceRealtimeAudioChunkFileRow>();
   for (const c of chunks) {
     const prev = byFile.get(c.file);
     if (!prev) {
