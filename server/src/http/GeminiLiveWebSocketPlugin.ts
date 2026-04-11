@@ -301,8 +301,10 @@ export class GeminiLiveWebSocketPlugin {
               automaticActivityDetection: {
                 startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
                 endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
-                silenceDurationMs: 800,
-                prefixPaddingMs: 50,
+                /** More silence before end-of-speech (ms) — fewer mid-thought cuts on live mic. */
+                silenceDurationMs: 1200,
+                /** Higher = longer sustained speech before start-of-speech commits — fewer false starts (noise, keyboard). */
+                prefixPaddingMs: 200,
               },
               turnCoverage: TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
             },
