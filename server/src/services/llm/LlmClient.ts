@@ -29,7 +29,7 @@ export type LlmJsonChatParams = {
   maxOutputTokens?: number;
 };
 
-/** Multimodal JSON-style completion (e.g. editor ROI from a PNG). */
+/** Multimodal JSON-style completion (vision + text when the model supports it). */
 export type LlmVisionJsonChatParams = {
   system: string;
   userText: string;

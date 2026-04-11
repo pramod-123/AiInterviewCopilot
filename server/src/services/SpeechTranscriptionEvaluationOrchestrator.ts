@@ -9,7 +9,7 @@ export type TranscribeAndEvaluateOptions = {
   problemStatementText?: string;
   /** Frame timestamps (seconds) on the cropped video timeline; paired with `evaluationCodeSnapshot`. */
   evaluationFrameTimesSec?: number[];
-  /** Per-frame editor text from video ROI (Tesseract) or live session code snapshots, aligned with `evaluationFrameTimesSec`. */
+  /** Per-timestamp editor text from live session code snapshots (legacy: was also used with frame OCR), aligned with `evaluationFrameTimesSec`. */
   evaluationCodeSnapshot?: string[];
   /**
    * Live sessions: sparse code snapshots — fill speech slices that missed a snapshot with the previous code.

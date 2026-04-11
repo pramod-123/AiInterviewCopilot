@@ -30,7 +30,7 @@ export class PromptLoader {
   }
 
   /**
-   * Loads `server/agents/{agentDir}/AGENT.md` (voice / agent personas). ROI and other templates stay under `prompts/`.
+   * Loads `server/agents/{agentDir}/AGENT.md` (voice / agent personas). Other templates stay under `prompts/`.
    */
   loadAgentSync(agentDir: string): string {
     const full = path.join(this.agentsDir, agentDir, "AGENT.md");

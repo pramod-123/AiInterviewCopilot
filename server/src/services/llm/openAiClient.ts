@@ -4,7 +4,7 @@ import { SpeechSegment, SpeechTranscription } from "../../types/speechTranscript
 
 export const DEFAULT_OPENAI_STT_MODEL = "whisper-1";
 
-/** Shared OpenAI SDK client when `OPENAI_API_KEY` is set (STT, ROI, {@link OpenAiLlmClient}). */
+/** Shared OpenAI SDK client when `OPENAI_API_KEY` is set (STT, {@link OpenAiLlmClient}). */
 export function tryCreateOpenAiClient(env: NodeJS.ProcessEnv = process.env): OpenAI | null {
   const key = env.OPENAI_API_KEY?.trim();
   if (!key) {

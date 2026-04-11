@@ -4,7 +4,7 @@ This document is the **low-level** design for the Node/TypeScript server under `
 
 **High-level** setup, repository layout, **HTTP route summaries**, and the **Chrome extension** live in the **[repository README](../README.md)** (including [HTTP API (summary)](../README.md#http-api-summary) and [Browser extension](../README.md#browser-extension-leetcode-live-capture)).
 
-> **Note (2026):** The classic **`POST /api/interviews`** video job pipeline, **Tesseract**, **LLM ROI**, **`pipelineCli`**, and **`E2eInterviewPipeline`** were **removed**. The server still needs **ffmpeg**/**ffprobe** and **STT + evaluation** config. Sections below that describe upload-video OCR/ROI are **historical** until this file is rewritten.
+> **Note (2026):** The classic **`POST /api/interviews`** video job pipeline, **Tesseract**, **LLM ROI**, **`pipelineCli`**, and **`E2eInterviewPipeline`** were **removed** (including **`prompts/roi-editor-*.md`**). The server still needs **ffmpeg**/**ffprobe** and **STT + evaluation** config. Sections below that describe upload-video OCR/ROI are **historical** until this file is rewritten.
 
 ---
 
@@ -327,7 +327,7 @@ There is **no** traditional edge detector or template matcher for the editor reg
 
 1. **Extracts one full-resolution PNG** from the source video (`ffmpeg`, `-frames:v 1`) — the **first frame** of the (optionally time-limited) clip.
 2. Reads **true PNG width/height** from the file header (`readPngDimensions`) so the model and parser share the same coordinate system.
-3. Sends that image to **OpenAI Chat Completions** with **`response_format: json_object`**, **`detail: "high"`** on the image, and prompts from **`prompts/roi-editor-system.md`** + **`roi-editor-user.md`**.
+3. ~~Sends that image to OpenAI Chat Completions with `response_format: json_object`, `detail: "high"`, and prompts from `prompts/roi-editor-*.md` (those prompt files were **removed** with the ROI pipeline).~~
 
 The **system prompt** instructs the model to:
 
