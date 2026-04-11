@@ -22,6 +22,52 @@ The **Chrome** extension under **`browser-extension/chrome/`** starts sessions f
 - **ffmpeg** & **ffprobe** (merge WebM, WAV extract, stitch)
 - **OpenAI API key** for remote Whisper and (by default) evaluation (Anthropic optional for eval)
 
+## Installation
+
+### Option A — Release installer (recommended for end users)
+
+From a **clone or copy** of this repository at the version you want:
+
+```bash
+./install.sh
+```
+
+The script downloads the **server** tarball and **Chrome extension** zip from **GitHub Releases** for the repo you specify (default prompt: enter `owner/name`, e.g. `pramod-123/AiInterviewCopilot`). It uses the **public GitHub API** and release asset URLs — **no `GITHUB_TOKEN`** or other GitHub credential is required.
+
+Useful environment variables (see comments at the top of [`install.sh`](./install.sh)):
+
+| Variable | Purpose |
+|----------|---------|
+| `AI_INTERVIEW_COPILOT_REPO` | `owner/name` — skips the repo prompt when set |
+| `RELEASE_TAG` | e.g. `latest` or `v1.2.3` — skips the tag prompt |
+| `INSTALL_PREFIX` | Where to install (default under `$HOME/.local/share/`) |
+| `INSTALL_CONSUMER_YES=1` | Non-interactive: accept default y/n prompts |
+
+Non-interactive example:
+
+```bash
+INSTALL_CONSUMER_YES=1 AI_INTERVIEW_COPILOT_REPO=pramod-123/AiInterviewCopilot ./install.sh
+```
+
+### Option B — GitHub release script (minimal)
+
+If you only want the **pre-built server tarball** unpacked and Prisma applied:
+
+```bash
+AI_INTERVIEW_COPILOT_REPO=owner/name ./scripts/install-from-github-release.sh [--prefix DIR] [--brew] [--no-run]
+```
+
+Same public-API behavior: **no GitHub token**.
+
+### Option C — Developers (from this repo)
+
+```bash
+./install-dev.sh          # npm ci, prisma, start dev server (optional: --brew on macOS for ffmpeg)
+# or see Quick start below for manual steps
+```
+
+More detail: [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ## Quick start
 
 ```bash
@@ -74,10 +120,9 @@ Toolbar **popup** (API base URL, mic hint, **Start interview** / **Sessions**):
 
 ## HTTP API (summary)
 
-**Classic video jobs**
+**Interview jobs (poll)**
 
-- **`POST /api/interviews`** — multipart field `file`: interview **video** (e.g. `.mov`, `.mp4`)
-- **`GET /api/interviews/:id`** — job status; when complete, includes `result` (STT summary, evaluation payload, pipeline metadata). **Speech** is in `speechTranscript` (STT windows: `startMs`, `endMs`, `text`, **`speaker`** — diarized label when known, e.g. `INTERVIEWER` / `INTERVIEWEE`, else `null`). **Persisted code/OCR** is in `codeSnapshots` (`offsetMs`, `text`, `source`: `VIDEO_OCR` \| `EDITOR_SNAPSHOT`). Field `transcripts` is a backward-compatible alias for `speechTranscript`.
+- **`GET /api/interviews/:id`** — status and, when ready, `result` (STT + evaluation). **`POST /api/interviews`** (uploaded video jobs) has been **removed**; this endpoint is used for jobs created when a **live session** ends. **Speech**: `speechTranscript` (windows with `startMs`, `endMs`, `text`, optional `speaker`). **Code timeline**: `codeSnapshots` (`offsetMs`, `text`, `source` — live sessions use `EDITOR_SNAPSHOT`). `transcripts` aliases `speechTranscript`.
 
 **Live sessions (extension)**
 

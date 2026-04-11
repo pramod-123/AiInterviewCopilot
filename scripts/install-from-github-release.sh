@@ -13,7 +13,6 @@ VERSION="latest"
 PREFIX=""
 WITH_BREW=false
 RUN_SERVER=true
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 usage() {
   cat <<'EOF'
@@ -27,7 +26,7 @@ Usage: AI_INTERVIEW_COPILOT_REPO=owner/name ./scripts/install-from-github-releas
   -h, --help            Show this help
 
 Requires on PATH: Node.js 20+, ffmpeg, ffprobe, curl, tar, python3.
-Optional: GITHUB_TOKEN for higher API rate limits or private repos.
+Release metadata is fetched from the public GitHub API (no token).
 
 After install, edit .env in the install directory (OPENAI_API_KEY, etc.).
 EOF
@@ -142,11 +141,6 @@ if [[ ${#missing_bin[@]} -gt 0 ]]; then
   exit 1
 fi
 
-CURL_AUTH=()
-if [[ -n "${GITHUB_TOKEN}" ]]; then
-  CURL_AUTH=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-fi
-
 if [[ "${VERSION}" == "latest" ]]; then
   API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 else
@@ -159,7 +153,7 @@ cleanup() { rm -f "${TMP_JSON}" "${TMP_TGZ}"; }
 trap cleanup EXIT
 
 echo "Fetching release metadata from ${API_URL}..."
-curl -fsSL "${CURL_AUTH[@]}" -H "Accept: application/vnd.github+json" -o "${TMP_JSON}" "${API_URL}"
+curl -fsSL -H "Accept: application/vnd.github+json" -o "${TMP_JSON}" "${API_URL}"
 
 DOWNLOAD_URL="$(
   python3 -c "

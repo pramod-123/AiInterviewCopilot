@@ -14,8 +14,7 @@
 # Developers working from a git clone should use ./install-dev.sh (npm in server/, dev server).
 #
 # Environment:
-#   AI_INTERVIEW_COPILOT_REPO   default GitHub owner/name for releases
-#   GITHUB_TOKEN                API rate limits / private repos; also check-update.sh
+#   AI_INTERVIEW_COPILOT_REPO   GitHub owner/name for releases (public repo; anonymous API)
 #   INSTALL_CONSUMER_YES        if 1, treat all y/n prompts as "yes" (no secret prompts;
 #                               set OPENAI_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER,
 #                               HF_TOKEN or HUGGING_FACE_HUB_TOKEN, GEMINI_API_KEY,
@@ -38,7 +37,6 @@ ZSH_LAUNCHER_MARKER='# Ai Interview Copilot launcher (install.sh)'
 REPO="${AI_INTERVIEW_COPILOT_REPO:-}"
 RELEASE_TAG="${RELEASE_TAG:-}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-}"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 RUN_SERVER_AFTER=false
 AUTO_YES="${INSTALL_CONSUMER_YES:-}"
 
@@ -591,20 +589,16 @@ fetch_release_json() {
   else
     url="https://api.github.com/repos/${repo}/releases/tags/${tag}"
   fi
-  local auth=()
-  [[ -n "${GITHUB_TOKEN}" ]] && auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-  curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" -o "${out}" "${url}"
+  curl -fsSL -H "Accept: application/vnd.github+json" -o "${out}" "${url}"
 }
 
 download_asset() {
   local url="$1"
   local dest="$2"
-  local auth=()
-  [[ -n "${GITHUB_TOKEN}" ]] && auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
   if [[ -z "${NO_COLOR:-}" && -z "${INSTALL_NO_CURL_PROGRESS:-}" && -t 2 ]]; then
-    curl -fSL --progress-bar "${auth[@]}" -L -o "${dest}" "${url}"
+    curl -fSL --progress-bar -L -o "${dest}" "${url}"
   else
-    curl -fsSL "${auth[@]}" -L -o "${dest}" "${url}"
+    curl -fsSL -L -o "${dest}" "${url}"
   fi
 }
 
@@ -991,13 +985,9 @@ if [[ -z "${local_ver}" ]]; then
   echo "check-update: could not read version from package.json" >&2
   exit 1
 fi
-auth=()
-if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-  auth=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-fi
 url="https://api.github.com/repos/${REPO}/releases/latest"
-if ! json="$(curl -fsSL "${auth[@]}" -H "Accept: application/vnd.github+json" "${url}" 2>/dev/null)"; then
-  printf 'check-update: failed to fetch %s (network, private repo, or API rate limit — try GITHUB_TOKEN).\n' "${url}" >&2
+if ! json="$(curl -fsSL -H "Accept: application/vnd.github+json" "${url}" 2>/dev/null)"; then
+  printf 'check-update: failed to fetch %s (network or GitHub API error).\n' "${url}" >&2
   exit 2
 fi
 tag="$(printf '%s' "${json}" | sed -n 's/.*\"tag_name\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p' | head -1)"
