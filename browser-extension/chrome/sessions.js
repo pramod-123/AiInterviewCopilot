@@ -25,6 +25,8 @@ const transcriptLines = document.getElementById("transcriptLines");
 const transcriptBadge = document.getElementById("transcriptBadge");
 const sessDimensionsMount = document.getElementById("sessDimensionsMount");
 const sessDimensionsBody = document.getElementById("sessDimensionsBody");
+const sessMissedPairMount = document.getElementById("sessMissedPairMount");
+const sessExtendedEvalMount = document.getElementById("sessExtendedEvalMount");
 const sessMomentCard = document.getElementById("sess-moment-card");
 const momentByMomentLines = document.getElementById("momentByMomentLines");
 
@@ -367,6 +369,13 @@ function clearDimensionsMount() {
   sessDimensionsMount?.classList.add("hidden");
 }
 
+function clearFeedbackLayoutMounts() {
+  sessMissedPairMount?.replaceChildren();
+  sessMissedPairMount?.classList.add("hidden");
+  sessExtendedEvalMount?.replaceChildren();
+  sessExtendedEvalMount?.classList.add("hidden");
+}
+
 function disconnectPostProcessWebSocketOnly() {
   if (postProcessWebSocket) {
     try {
@@ -458,6 +467,7 @@ function applyProcessingPlaceholders(detailInner) {
   fillMomentSkeleton();
   fillFeedbackSkeleton(detailInner);
   clearDimensionsMount();
+  clearFeedbackLayoutMounts();
   sessDimensionsBody?.replaceChildren();
   const dimSk = document.createElement("div");
   dimSk.className = "sess-skel-stack";
@@ -514,6 +524,7 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
     if (!res.ok) {
       clearProcessingPlaceholders();
       removeProcessingHint(detailInner);
+      clearFeedbackLayoutMounts();
       detailInner.replaceChildren();
       const err =
         typeof body.error === "string"
@@ -542,8 +553,10 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
       rv.renderInterviewGetResponse(detailInner, body, {
         richLayout: true,
         omitInlineTranscriptionMeta: true,
+        missedMount: sessMissedPairMount ?? undefined,
+        extendedMount: sessExtendedEvalMount ?? undefined,
       });
-      moveDimensionsSection(detailInner);
+      moveDimensionsSection(detailInner, sessExtendedEvalMount);
       renderTokenMetaUnderSession(
         /** @type {Record<string, unknown>} */ (body.result),
       );
@@ -553,6 +566,7 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
     if (body.status === "FAILED") {
       clearProcessingPlaceholders();
       removeProcessingHint(detailInner);
+      clearFeedbackLayoutMounts();
       const badge =
         transcripts.length > 0 ? `${transcripts.length} segments` : "—";
       clearTranscriptSeekHighlight();
@@ -581,6 +595,7 @@ async function loadInterviewPayload(_sessionId, jobId, detailInner, rv) {
   } catch (e) {
     clearProcessingPlaceholders();
     removeProcessingHint(detailInner);
+    clearFeedbackLayoutMounts();
     detailInner.replaceChildren();
     rv.renderStatusMessage(detailInner, e instanceof Error ? e.message : String(e), true);
     return { state: "failed" };
@@ -677,6 +692,7 @@ function wirePostProcessStream(sessionId, jobId, detailInner, rv) {
       disconnectPostProcessListeners();
       clearProcessingPlaceholders();
       removeProcessingHint(detailInner);
+      clearFeedbackLayoutMounts();
       detailInner.replaceChildren();
       rv.renderStatusMessage(
         detailInner,
@@ -974,6 +990,12 @@ function renderChronologicalTurningPointsPanel(items) {
       badge.classList.add("sess-moment-range--seekable");
       badge.dataset.seekStartMs = String(momentParsed.startMs);
       badge.title = "Seek video and transcript to start of this range";
+      badge.setAttribute("role", "button");
+      badge.tabIndex = 0;
+      badge.setAttribute(
+        "aria-label",
+        `Seek recording to start of range at ${formatEvidenceClock(momentParsed.startMs)}`,
+      );
     }
     head.appendChild(badge);
     if (phase.trim()) {
@@ -1015,6 +1037,9 @@ function renderChronologicalTurningPointsPanel(items) {
           ts.textContent = `[${formatEvidenceClock(tms)}]`;
           ts.dataset.seekMs = String(Math.round(tms));
           ts.title = "Seek to this time";
+          ts.setAttribute("role", "button");
+          ts.tabIndex = 0;
+          ts.setAttribute("aria-label", `Seek recording to ${formatEvidenceClock(tms)}`);
           const srcSp = document.createElement("span");
           srcSp.className = "sess-moment-ev-src";
           srcSp.textContent = src ? `${src} ` : "";
@@ -1041,7 +1066,7 @@ function renderChronologicalTurningPointsPanel(items) {
       const p = document.createElement("p");
       p.className = "sess-moment-meta";
       const strong = document.createElement("strong");
-      strong.textContent = "Impact: ";
+      strong.textContent = "💥 Impact: ";
       p.appendChild(strong);
       p.appendChild(document.createTextNode(impact));
       article.appendChild(p);
@@ -1230,9 +1255,15 @@ function selectSessionFromQueryIfPresent() {
 /**
  * @param {HTMLElement} inner
  */
-function moveDimensionsSection(inner) {
+/**
+ * @param {HTMLElement} inner
+ * @param {HTMLElement | null | undefined} [extendedRoot]
+ */
+function moveDimensionsSection(inner, extendedRoot) {
   clearDimensionsMount();
-  const dimSec = inner.querySelector("#ic-dimensions-section");
+  const dimSec =
+    inner.querySelector("#ic-dimensions-section") ||
+    (extendedRoot && extendedRoot.querySelector("#ic-dimensions-section"));
   if (dimSec && sessDimensionsBody && sessDimensionsMount) {
     sessDimensionsBody.appendChild(dimSec);
     sessDimensionsMount.classList.remove("hidden");
@@ -1260,6 +1291,7 @@ async function selectSession(
   disconnectPostProcessListeners();
   selectedSessionId = sessionId;
   clearDimensionsMount();
+  clearFeedbackLayoutMounts();
 
   for (const el of sessionList?.querySelectorAll(".sess-session-item") ?? []) {
     if (el instanceof HTMLElement) {
@@ -1311,6 +1343,7 @@ async function selectSession(
 
   const rv = window.InterviewCopilotResultView;
   if (!rv) {
+    clearFeedbackLayoutMounts();
     detailPanel.replaceChildren();
     const p = document.createElement("p");
     p.className = "detail-err";
@@ -1333,6 +1366,7 @@ async function selectSession(
     p.textContent = "Checking for post-process job…";
     detailInner.appendChild(p);
     effectiveJobId = await resolvePostProcessJobIdFromSession(sessionId);
+    clearFeedbackLayoutMounts();
     detailInner.replaceChildren();
     if (effectiveJobId) {
       syncListRowPostProcessJob(sessionId, effectiveJobId);
@@ -1509,22 +1543,44 @@ footJumpDims?.addEventListener("click", () => {
 
 if (detailWorkspace && !detailWorkspace.dataset.seekDelegationBound) {
   detailWorkspace.dataset.seekDelegationBound = "1";
+  /**
+   * @param {HTMLElement} el
+   */
+  function seekFromSeekableElement(el) {
+    if (el.dataset.seekMs != null && el.dataset.seekMs !== "") {
+      const v = Number(el.dataset.seekMs);
+      if (Number.isFinite(v)) {
+        seekToRecordingTimeMs(v);
+        return true;
+      }
+    }
+    if (el.dataset.seekStartMs != null && el.dataset.seekStartMs !== "") {
+      const v = Number(el.dataset.seekStartMs);
+      if (Number.isFinite(v)) {
+        seekToRecordingTimeMs(v);
+        return true;
+      }
+    }
+    return false;
+  }
   detailWorkspace.addEventListener("click", (e) => {
-    const dimTs = e.target.closest("[data-seek-ms]");
-    if (dimTs instanceof HTMLElement) {
-      const v = Number(dimTs.dataset.seekMs);
-      if (Number.isFinite(v)) {
-        seekToRecordingTimeMs(v);
-        return;
-      }
+    const seekHit = e.target.closest("[data-seek-ms], [data-seek-start-ms]");
+    if (seekHit instanceof HTMLElement) {
+      seekFromSeekableElement(seekHit);
     }
-    const momentBadge = e.target.closest("[data-seek-start-ms]");
-    if (momentBadge instanceof HTMLElement) {
-      const v = Number(momentBadge.dataset.seekStartMs);
-      if (Number.isFinite(v)) {
-        seekToRecordingTimeMs(v);
-      }
+  });
+  detailWorkspace.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") {
+      return;
     }
+    const seekHit = e.target.closest("[data-seek-ms], [data-seek-start-ms]");
+    if (!(seekHit instanceof HTMLElement) || !detailWorkspace.contains(seekHit)) {
+      return;
+    }
+    if (e.key === " ") {
+      e.preventDefault();
+    }
+    seekFromSeekableElement(seekHit);
   });
 }
 

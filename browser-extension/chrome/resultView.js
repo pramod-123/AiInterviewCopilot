@@ -108,9 +108,12 @@
       ts.textContent = `[${formatTimestampMs(tms)}]`;
       ts.dataset.seekMs = String(Math.round(tms));
       ts.title = "Seek video and transcript to this time";
+      ts.setAttribute("role", "button");
+      ts.tabIndex = 0;
+      ts.setAttribute("aria-label", `Seek recording to ${formatTimestampMs(tms)}`);
       const srcSpan = document.createElement("span");
       srcSpan.className = "dim-ev-src";
-      srcSpan.textContent = src ? ` ${src}` : "";
+      srcSpan.textContent = src ? ` ${src.trim()}` : "";
       const quoteSpan = document.createElement("span");
       quoteSpan.className = "dim-ev-quote";
       const srcLower = src.trim().toLowerCase();
@@ -137,11 +140,73 @@
         quoteSpan.classList.add("md-content");
         setNodeInlineMarkdownOrText(quoteSpan, quote);
       }
-      li.appendChild(ts);
-      li.appendChild(srcSpan);
-      li.appendChild(document.createTextNode(" "));
-      li.appendChild(quoteSpan);
+      const codeBlockLayout = srcLower === "code" || srcLower === "ocr";
+      if (codeBlockLayout) {
+        li.classList.add("dim-ev-li--codeblock");
+        const meta = document.createElement("div");
+        meta.className = "dim-ev-meta dim-ev-meta--header";
+        meta.appendChild(ts);
+        meta.appendChild(srcSpan);
+        meta.appendChild(document.createTextNode(":"));
+        li.appendChild(meta);
+        li.appendChild(quoteSpan);
+      } else {
+        li.appendChild(ts);
+        li.appendChild(srcSpan);
+        li.appendChild(document.createTextNode(" "));
+        li.appendChild(quoteSpan);
+      }
       ul.appendChild(li);
+    }
+  }
+
+  /**
+   * @param {Record<string, unknown>} s
+   * @returns {string}
+   */
+  function decisionTraceStepHeadline(s) {
+    const step = typeof s.step === "string" ? s.step.trim() : "";
+    const checked =
+      typeof s.whatWasChecked === "string"
+        ? s.whatWasChecked.trim()
+        : typeof s.what_was_checked === "string"
+          ? s.what_was_checked.trim()
+          : "";
+    if (step && checked) {
+      return `${step} - ${checked}`;
+    }
+    if (checked) {
+      return checked;
+    }
+    return step;
+  }
+
+  /**
+   * Rich headline: bold `step` (e.g. problem_understanding), then " - " + what_was_checked when present.
+   * @param {HTMLElement} p
+   * @param {Record<string, unknown>} s
+   */
+  function fillDecisionTraceHeadlineEl(p, s) {
+    p.replaceChildren();
+    const step = typeof s.step === "string" ? s.step.trim() : "";
+    const checked =
+      typeof s.whatWasChecked === "string"
+        ? s.whatWasChecked.trim()
+        : typeof s.what_was_checked === "string"
+          ? s.what_was_checked.trim()
+          : "";
+    if (step) {
+      const em = document.createElement("strong");
+      em.className = "ic-eval-trace-step-id";
+      em.textContent = step;
+      p.appendChild(em);
+      if (checked) {
+        p.appendChild(document.createTextNode(` - ${checked}`));
+      }
+      return;
+    }
+    if (checked) {
+      p.textContent = checked;
     }
   }
 
@@ -222,6 +287,111 @@
   }
 
   /**
+   * @param {HTMLTableElement} table
+   * @param {Record<string, unknown>} dims
+   * @param {{ richScores: boolean }} opts
+   */
+  function fillDimensionsTable(table, dims, opts) {
+    table.replaceChildren();
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    for (const label of ["Area", "Score", "Evidence", "Notes"]) {
+      const th = document.createElement("th");
+      th.textContent = label;
+      hr.appendChild(th);
+    }
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    for (const [key, raw] of Object.entries(dims)) {
+      if (!raw || typeof raw !== "object") {
+        continue;
+      }
+      const dim = /** @type {Record<string, unknown>} */ (raw);
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      fillDimensionAreaCell(tdName, key);
+      const tdScore = document.createElement("td");
+      if (opts.richScores) {
+        const sc = dim.score;
+        if (typeof sc === "number" && Number.isFinite(sc)) {
+          const span = document.createElement("span");
+          span.className = `dim-score ${dimScoreClass(sc)}`.trim();
+          span.textContent = String(sc);
+          const max = document.createElement("span");
+          max.className = "dim-max";
+          max.textContent = " / 5";
+          tdScore.appendChild(span);
+          tdScore.appendChild(max);
+        } else {
+          tdScore.textContent = "—";
+        }
+      } else {
+        tdScore.textContent = typeof dim.score === "number" ? String(dim.score) : "—";
+      }
+      const tdSuff = document.createElement("td");
+      tdSuff.className = "dim-sufficiency-cell";
+      const suff =
+        typeof dim.evidenceSufficiency === "string"
+          ? dim.evidenceSufficiency
+          : typeof dim.evidence_sufficiency === "string"
+            ? dim.evidence_sufficiency
+            : "";
+      tdSuff.textContent = suff ? suff.replace(/_/g, " ") : "—";
+      const tdRat = document.createElement("td");
+      fillDimensionNotesCell(tdRat, dim);
+      tr.appendChild(tdName);
+      tr.appendChild(tdScore);
+      tr.appendChild(tdSuff);
+      tr.appendChild(tdRat);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+  }
+
+  /**
+   * Collapsible eval panel (`<details open>`). Body uses `ic-eval-list-panel-body`.
+   * @param {string} panelClasses Space-separated; must include `ic-eval-list-panel`.
+   * @param {string} titleText
+   * @param {(body: HTMLDivElement) => void} fillBody
+   * @returns {HTMLDetailsElement}
+   */
+  function createEvalDisclosurePanel(panelClasses, titleText, fillBody) {
+    const details = document.createElement("details");
+    details.className = `${panelClasses} ic-eval-disclosure`.trim();
+    details.open = true;
+    const summary = document.createElement("summary");
+    summary.className = "ic-eval-list-panel-summary";
+    summary.textContent = titleText;
+    const body = document.createElement("div");
+    body.className = "ic-eval-list-panel-body";
+    fillBody(body);
+    details.appendChild(summary);
+    details.appendChild(body);
+    return details;
+  }
+
+  /**
+   * @param {Record<string, unknown>} dims
+   * @param {{ richScores: boolean }} opts
+   * @returns {HTMLElement}
+   */
+  function createDimensionsSection(dims, opts) {
+    const disclosure = createEvalDisclosurePanel(
+      "ic-dimensions-section ic-eval-list-panel",
+      "📊 Dimensions analysis",
+      (body) => {
+        const table = document.createElement("table");
+        table.className = "dim-table";
+        fillDimensionsTable(table, dims, opts);
+        body.appendChild(table);
+      },
+    );
+    disclosure.id = "ic-dimensions-section";
+    return disclosure;
+  }
+
+  /**
    * @param {Record<string, unknown>} e
    * @param {string} camel
    * @param {string} snake
@@ -267,27 +437,22 @@
   function appendEvaluationRich(root, evaluation) {
     const strengths = asStringArray(evaluation.strengths);
     const weaknesses = asStringArray(evaluation.weaknesses);
-    const missed = asStringArray(evaluation.missedOpportunities ?? evaluation.missed_opportunities);
-    const missedIv = asStringArray(
-      evaluation.missedInterviewerFriendlyBehaviors ?? evaluation.missed_interviewer_friendly_behaviors,
-    );
-    const altPath = asStringArray(evaluation.alternativeStrongerPath ?? evaluation.alternative_stronger_path);
 
     appendEvalNarrativeBlock(
       root,
-      "Final outcome",
+      "🏁 Final outcome",
       evalPickStr(evaluation, "finalOutcome", "final_outcome"),
       "ic-eval-block ic-eval-block--outcome",
     );
     appendEvalNarrativeBlock(
       root,
-      "Interview process quality",
+      "⚙️ Interview process quality",
       evalPickStr(evaluation, "interviewProcessQuality", "interview_process_quality"),
       "ic-eval-block ic-eval-block--process",
     );
     appendEvalNarrativeBlock(
       root,
-      "Hire signal",
+      "✨ Hire signal",
       evalPickStr(evaluation, "hireSignalSummary", "hire_signal_summary"),
       "ic-eval-block ic-eval-block--hire",
     );
@@ -296,7 +461,7 @@
       const row = document.createElement("p");
       row.className = "ic-eval-prediction";
       const strong = document.createElement("strong");
-      strong.textContent = "Round prediction: ";
+      strong.textContent = "🎯 Round prediction: ";
       row.appendChild(strong);
       row.appendChild(document.createTextNode(pred.replace(/_/g, " ")));
       root.appendChild(row);
@@ -309,7 +474,7 @@
         const col = document.createElement("div");
         col.className = "sess-eval-col strengths ic-eval-col ic-strengths";
         const h4 = document.createElement("h4");
-        h4.textContent = "Strengths";
+        h4.textContent = "💪 Strengths";
         col.appendChild(h4);
         const ul = document.createElement("ul");
         for (const s of strengths) {
@@ -322,7 +487,7 @@
         const col = document.createElement("div");
         col.className = "sess-eval-col weaknesses ic-eval-col ic-weaknesses";
         const h4 = document.createElement("h4");
-        h4.textContent = "Weaknesses";
+        h4.textContent = "📉 Weaknesses";
         col.appendChild(h4);
         const ul = document.createElement("ul");
         for (const s of weaknesses) {
@@ -333,369 +498,334 @@
       }
       root.appendChild(grid);
     }
+  }
 
-    if (missed.length > 0) {
-      const block = document.createElement("div");
-      block.className = "sess-missed-block ic-missed-block";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Missed opportunities";
-      block.appendChild(h4);
-      const ul = document.createElement("ul");
-      for (const line of missed) {
-        ul.appendChild(createMarkdownListItem(line));
-      }
-      block.appendChild(ul);
-      root.appendChild(block);
-    }
-
-    if (missedIv.length > 0) {
-      const block = document.createElement("div");
-      block.className = "sess-missed-block ic-missed-block ic-missed-iv";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Missed interviewer-friendly behaviors";
-      block.appendChild(h4);
-      const ul = document.createElement("ul");
-      for (const line of missedIv) {
-        ul.appendChild(createMarkdownListItem(line));
-      }
-      block.appendChild(ul);
-      root.appendChild(block);
-    }
-
+  /**
+   * Rich layout: coaching / prep / conflicts / dimensions (main column, below missed opportunities).
+   * @param {HTMLElement} root
+   * @param {Record<string, unknown>} evaluation
+   */
+  function appendEvaluationRichContinuation(root, evaluation) {
+    const altPath = asStringArray(evaluation.alternativeStrongerPath ?? evaluation.alternative_stronger_path);
     const wtsd = evaluation.whatToSayDifferently ?? evaluation.what_to_say_differently;
     if (Array.isArray(wtsd) && wtsd.length > 0) {
-      const block = document.createElement("div");
-      block.className = "ic-eval-wtsd";
-      const h4 = document.createElement("h4");
-      h4.textContent = "What to say differently";
-      block.appendChild(h4);
-      for (const item of wtsd) {
-        if (!item || typeof item !== "object") {
-          continue;
-        }
-        const o = /** @type {Record<string, unknown>} */ (item);
-        const situation = typeof o.situation === "string" ? o.situation : "";
-        const better =
-          typeof o.betterPhrasing === "string"
-            ? o.betterPhrasing
-            : typeof o.better_phrasing === "string"
-              ? o.better_phrasing
-              : "";
-        const why =
-          typeof o.whyItHelps === "string"
-            ? o.whyItHelps
-            : typeof o.why_it_helps === "string"
-              ? o.why_it_helps
-              : "";
-        const card = document.createElement("div");
-        card.className = "ic-eval-wtsd-card";
-        if (situation.trim()) {
-          const p = document.createElement("p");
-          p.className = "ic-eval-wtsd-situation";
-          const em = document.createElement("strong");
-          em.textContent = "Situation: ";
-          p.appendChild(em);
-          p.appendChild(document.createTextNode(situation.trim()));
-          card.appendChild(p);
-        }
-        if (better.trim()) {
-          const p = document.createElement("p");
-          p.className = "md-content";
-          const em = document.createElement("strong");
-          em.textContent = "Better phrasing: ";
-          p.appendChild(em);
-          const span = document.createElement("span");
-          setNodeMarkdownOrText(span, better.trim());
-          p.appendChild(span);
-          card.appendChild(p);
-        }
-        if (why.trim()) {
-          const p = document.createElement("p");
-          p.className = "md-content";
-          const em = document.createElement("strong");
-          em.textContent = "Why it helps: ";
-          p.appendChild(em);
-          const span = document.createElement("span");
-          setNodeMarkdownOrText(span, why.trim());
-          p.appendChild(span);
-          card.appendChild(p);
-        }
-        block.appendChild(card);
-      }
+      const block = createEvalDisclosurePanel(
+        "ic-eval-wtsd ic-eval-list-panel",
+        "💬 What to say differently",
+        (body) => {
+          for (const item of wtsd) {
+            if (!item || typeof item !== "object") {
+              continue;
+            }
+            const o = /** @type {Record<string, unknown>} */ (item);
+            const situation = typeof o.situation === "string" ? o.situation : "";
+            const better =
+              typeof o.betterPhrasing === "string"
+                ? o.betterPhrasing
+                : typeof o.better_phrasing === "string"
+                  ? o.better_phrasing
+                  : "";
+            const why =
+              typeof o.whyItHelps === "string"
+                ? o.whyItHelps
+                : typeof o.why_it_helps === "string"
+                  ? o.why_it_helps
+                  : "";
+            const card = document.createElement("div");
+            card.className = "ic-eval-wtsd-card";
+            if (situation.trim()) {
+              const p = document.createElement("p");
+              p.className = "ic-eval-wtsd-situation";
+              const em = document.createElement("strong");
+              em.textContent = "📍 Situation: ";
+              p.appendChild(em);
+              p.appendChild(document.createTextNode(situation.trim()));
+              card.appendChild(p);
+            }
+            if (better.trim()) {
+              const p = document.createElement("p");
+              p.className = "md-content";
+              const em = document.createElement("strong");
+              em.textContent = "✏️ Better phrasing: ";
+              p.appendChild(em);
+              const span = document.createElement("span");
+              setNodeMarkdownOrText(span, better.trim());
+              p.appendChild(span);
+              card.appendChild(p);
+            }
+            if (why.trim()) {
+              const p = document.createElement("p");
+              p.className = "md-content";
+              const em = document.createElement("strong");
+              em.textContent = "💡 Why it helps: ";
+              p.appendChild(em);
+              const span = document.createElement("span");
+              setNodeMarkdownOrText(span, why.trim());
+              p.appendChild(span);
+              card.appendChild(p);
+            }
+            body.appendChild(card);
+          }
+        },
+      );
       root.appendChild(block);
     }
 
     const prepRaw = evaluation.prepSuggestions ?? evaluation.prep_suggestions;
     if (Array.isArray(prepRaw) && prepRaw.length > 0) {
-      const block = document.createElement("div");
-      block.className = "sess-prep-block ic-prep-block";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Prep suggestions";
-      block.appendChild(h4);
-      for (const item of prepRaw) {
-        if (typeof item === "string" && item.trim()) {
-          const ul = document.createElement("ul");
-          ul.appendChild(createMarkdownListItem(item.trim()));
-          block.appendChild(ul);
-          continue;
+      const block = createEvalDisclosurePanel("ic-eval-prep ic-eval-list-panel", "📚 Prep suggestions", (body) => {
+        const stack = document.createElement("div");
+        stack.className = "ic-prep-stack";
+        /** @type {HTMLUListElement | null} */
+        let stringRunUl = null;
+        for (const item of prepRaw) {
+          if (typeof item === "string" && item.trim()) {
+            if (!stringRunUl) {
+              stringRunUl = document.createElement("ul");
+              stringRunUl.className = "ic-prep-simple-list";
+              stack.appendChild(stringRunUl);
+            }
+            stringRunUl.appendChild(createMarkdownListItem(item.trim()));
+            continue;
+          }
+          stringRunUl = null;
+          if (!item || typeof item !== "object") {
+            continue;
+          }
+          const o = /** @type {Record<string, unknown>} */ (item);
+          const w = typeof o.weakness === "string" ? o.weakness : "";
+          const pr = typeof o.prescription === "string" ? o.prescription : "";
+          const g = typeof o.goal === "string" ? o.goal : "";
+          const card = document.createElement("div");
+          card.className = "ic-prep-card";
+          if (w.trim()) {
+            appendEvalNarrativeBlock(card, "⚠️ Weakness", w.trim(), "ic-prep-field");
+          }
+          if (pr.trim()) {
+            appendEvalNarrativeBlock(card, "💊 Prescription", pr.trim(), "ic-prep-field");
+          }
+          if (g.trim()) {
+            appendEvalNarrativeBlock(card, "🎯 Goal", g.trim(), "ic-prep-field");
+          }
+          if (card.childNodes.length > 0) {
+            stack.appendChild(card);
+          }
         }
-        if (!item || typeof item !== "object") {
-          continue;
-        }
-        const o = /** @type {Record<string, unknown>} */ (item);
-        const w = typeof o.weakness === "string" ? o.weakness : "";
-        const pr = typeof o.prescription === "string" ? o.prescription : "";
-        const g = typeof o.goal === "string" ? o.goal : "";
-        const card = document.createElement("div");
-        card.className = "ic-prep-card";
-        if (w.trim()) {
-          appendEvalNarrativeBlock(card, "Weakness", w.trim(), "ic-prep-field");
-        }
-        if (pr.trim()) {
-          appendEvalNarrativeBlock(card, "Prescription", pr.trim(), "ic-prep-field");
-        }
-        if (g.trim()) {
-          appendEvalNarrativeBlock(card, "Goal", g.trim(), "ic-prep-field");
-        }
-        if (card.childNodes.length > 0) {
-          block.appendChild(card);
-        }
-      }
+        body.appendChild(stack);
+      });
       root.appendChild(block);
     }
 
     const conflicts = evaluation.speechCodeConflicts ?? evaluation.speech_code_conflicts;
     if (Array.isArray(conflicts) && conflicts.length > 0) {
-      const block = document.createElement("div");
-      block.className = "ic-eval-conflicts";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Speech vs code";
-      block.appendChild(h4);
-      for (const item of conflicts) {
-        if (!item || typeof item !== "object") {
-          continue;
-        }
-        const c = /** @type {Record<string, unknown>} */ (item);
-        const card = document.createElement("div");
-        card.className = "ic-eval-conflict-card";
-        const tr =
-          typeof c.timeRange === "string"
-            ? c.timeRange
-            : typeof c.time_range === "string"
-              ? c.time_range
-              : "";
-        if (tr) {
-          const p = document.createElement("p");
-          p.className = "ic-eval-conflict-range";
-          const em = document.createElement("strong");
-          em.textContent = "Time: ";
-          p.appendChild(em);
-          p.appendChild(document.createTextNode(tr));
-          card.appendChild(p);
-        }
-        const issue = typeof c.issue === "string" ? c.issue : "";
-        if (issue.trim()) {
-          const p = document.createElement("p");
-          p.className = "md-content";
-          setNodeMarkdownOrText(p, issue.trim());
-          card.appendChild(p);
-        }
-        const se = c.speechEvidence ?? c.speech_evidence;
-        const ce = c.codeEvidence ?? c.code_evidence;
-        if (Array.isArray(se) && se.length > 0) {
-          const sub = document.createElement("p");
-          sub.className = "ic-eval-ev-label";
-          sub.textContent = "Speech evidence";
-          card.appendChild(sub);
-          const ul = document.createElement("ul");
-          ul.className = "dim-evidence-list";
-          appendEvidenceRowsToUl(ul, se);
-          if (ul.children.length > 0) {
-            card.appendChild(ul);
+      const block = createEvalDisclosurePanel("ic-eval-conflicts ic-eval-list-panel", "🎤 Speech vs code", (body) => {
+        for (const item of conflicts) {
+          if (!item || typeof item !== "object") {
+            continue;
           }
-        }
-        if (Array.isArray(ce) && ce.length > 0) {
-          const sub = document.createElement("p");
-          sub.className = "ic-eval-ev-label";
-          sub.textContent = "Code evidence";
-          card.appendChild(sub);
-          const ul = document.createElement("ul");
-          ul.className = "dim-evidence-list";
-          appendEvidenceRowsToUl(ul, ce);
-          if (ul.children.length > 0) {
-            card.appendChild(ul);
+          const c = /** @type {Record<string, unknown>} */ (item);
+          const card = document.createElement("div");
+          card.className = "ic-eval-conflict-card";
+          const tr =
+            typeof c.timeRange === "string"
+              ? c.timeRange
+              : typeof c.time_range === "string"
+                ? c.time_range
+                : "";
+          if (tr) {
+            const p = document.createElement("p");
+            p.className = "ic-eval-conflict-range";
+            const em = document.createElement("strong");
+            em.textContent = "⏱️ Time: ";
+            p.appendChild(em);
+            p.appendChild(document.createTextNode(tr));
+            card.appendChild(p);
           }
+          const issue = typeof c.issue === "string" ? c.issue : "";
+          if (issue.trim()) {
+            const p = document.createElement("p");
+            p.className = "md-content";
+            setNodeMarkdownOrText(p, issue.trim());
+            card.appendChild(p);
+          }
+          const se = c.speechEvidence ?? c.speech_evidence;
+          const ce = c.codeEvidence ?? c.code_evidence;
+          if (Array.isArray(se) && se.length > 0) {
+            const sub = document.createElement("p");
+            sub.className = "ic-eval-ev-label";
+            sub.textContent = "🎤 Speech evidence";
+            card.appendChild(sub);
+            const ul = document.createElement("ul");
+            ul.className = "dim-evidence-list";
+            appendEvidenceRowsToUl(ul, se);
+            if (ul.children.length > 0) {
+              card.appendChild(ul);
+            }
+          }
+          if (Array.isArray(ce) && ce.length > 0) {
+            const sub = document.createElement("p");
+            sub.className = "ic-eval-ev-label";
+            sub.textContent = "💻 Code evidence";
+            card.appendChild(sub);
+            const ul = document.createElement("ul");
+            ul.className = "dim-evidence-list";
+            appendEvidenceRowsToUl(ul, ce);
+            if (ul.children.length > 0) {
+              card.appendChild(ul);
+            }
+          }
+          const wim =
+            typeof c.whyItMatters === "string"
+              ? c.whyItMatters
+              : typeof c.why_it_matters === "string"
+                ? c.why_it_matters
+                : "";
+          if (wim.trim()) {
+            const p = document.createElement("p");
+            const em = document.createElement("strong");
+            em.textContent = "⚖️ Why it matters: ";
+            p.appendChild(em);
+            p.appendChild(document.createTextNode(wim.trim()));
+            card.appendChild(p);
+          }
+          const coach =
+            typeof c.coachingAdvice === "string"
+              ? c.coachingAdvice
+              : typeof c.coaching_advice === "string"
+                ? c.coaching_advice
+                : "";
+          if (coach.trim()) {
+            const p = document.createElement("p");
+            const em = document.createElement("strong");
+            em.textContent = "🎓 Coaching: ";
+            p.appendChild(em);
+            p.appendChild(document.createTextNode(coach.trim()));
+            card.appendChild(p);
+          }
+          body.appendChild(card);
         }
-        const wim =
-          typeof c.whyItMatters === "string"
-            ? c.whyItMatters
-            : typeof c.why_it_matters === "string"
-              ? c.why_it_matters
-              : "";
-        if (wim.trim()) {
-          const p = document.createElement("p");
-          const em = document.createElement("strong");
-          em.textContent = "Why it matters: ";
-          p.appendChild(em);
-          p.appendChild(document.createTextNode(wim.trim()));
-          card.appendChild(p);
-        }
-        const coach =
-          typeof c.coachingAdvice === "string"
-            ? c.coachingAdvice
-            : typeof c.coaching_advice === "string"
-              ? c.coaching_advice
-              : "";
-        if (coach.trim()) {
-          const p = document.createElement("p");
-          const em = document.createElement("strong");
-          em.textContent = "Coaching: ";
-          p.appendChild(em);
-          p.appendChild(document.createTextNode(coach.trim()));
-          card.appendChild(p);
-        }
-        block.appendChild(card);
-      }
+      });
       root.appendChild(block);
     }
 
     if (altPath.length > 0) {
-      const block = document.createElement("div");
-      block.className = "ic-eval-alt-path";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Alternative stronger path";
-      block.appendChild(h4);
-      const ul = document.createElement("ul");
-      for (const line of altPath) {
-        ul.appendChild(createMarkdownListItem(line));
-      }
-      block.appendChild(ul);
+      const block = createEvalDisclosurePanel(
+        "ic-eval-alt-path ic-eval-list-panel",
+        "🛤️ Alternative stronger path",
+        (body) => {
+          const ul = document.createElement("ul");
+          ul.className = "ic-eval-list-panel-ul";
+          for (const line of altPath) {
+            ul.appendChild(createMarkdownListItem(line));
+          }
+          body.appendChild(ul);
+        },
+      );
       root.appendChild(block);
     }
 
     const trace = evaluation.decisionTrace ?? evaluation.decision_trace;
     if (Array.isArray(trace) && trace.length > 0) {
-      const block = document.createElement("div");
-      block.className = "ic-eval-trace";
-      const h4 = document.createElement("h4");
-      h4.textContent = "Decision trace";
-      block.appendChild(h4);
-      const ol = document.createElement("ol");
-      ol.className = "ic-eval-trace-list";
-      for (const step of trace) {
-        if (!step || typeof step !== "object") {
-          continue;
-        }
-        const s = /** @type {Record<string, unknown>} */ (step);
-        const li = document.createElement("li");
-        const st = typeof s.step === "string" ? s.step : "";
-        if (st.trim()) {
-          const p = document.createElement("p");
-          const em = document.createElement("strong");
-          em.textContent = st.trim();
-          p.appendChild(em);
-          li.appendChild(p);
-        }
-        const checked =
-          typeof s.whatWasChecked === "string"
-            ? s.whatWasChecked
-            : typeof s.what_was_checked === "string"
-              ? s.what_was_checked
-              : "";
-        if (checked.trim()) {
-          const p = document.createElement("p");
-          p.className = "detail-muted";
-          p.textContent = checked.trim();
-          li.appendChild(p);
-        }
-        const evu = s.evidenceUsed ?? s.evidence_used;
-        if (Array.isArray(evu) && evu.length > 0) {
-          const ul = document.createElement("ul");
-          ul.className = "dim-evidence-list";
-          appendEvidenceRowsToUl(ul, evu);
-          if (ul.children.length > 0) {
-            li.appendChild(ul);
+      const block = createEvalDisclosurePanel("ic-eval-trace ic-eval-list-panel", "🔍 Decision trace", (body) => {
+        const ol = document.createElement("ol");
+        ol.className = "ic-eval-trace-list";
+        for (const step of trace) {
+          if (!step || typeof step !== "object") {
+            continue;
           }
+          const s = /** @type {Record<string, unknown>} */ (step);
+          const li = document.createElement("li");
+          const headP = document.createElement("p");
+          headP.className = "ic-eval-trace-headline";
+          fillDecisionTraceHeadlineEl(headP, s);
+          if (headP.textContent.trim()) {
+            li.appendChild(headP);
+          }
+          const evu = s.evidenceUsed ?? s.evidence_used;
+          if (Array.isArray(evu) && evu.length > 0) {
+            const ul = document.createElement("ul");
+            ul.className = "dim-evidence-list";
+            appendEvidenceRowsToUl(ul, evu);
+            if (ul.children.length > 0) {
+              li.appendChild(ul);
+            }
+          }
+          const concl = typeof s.conclusion === "string" ? s.conclusion : "";
+          if (concl.trim()) {
+            const p = document.createElement("p");
+            const em = document.createElement("strong");
+            em.textContent = "📌 Conclusion: ";
+            p.appendChild(em);
+            p.appendChild(document.createTextNode(concl.trim()));
+            li.appendChild(p);
+          }
+          ol.appendChild(li);
         }
-        const concl = typeof s.conclusion === "string" ? s.conclusion : "";
-        if (concl.trim()) {
-          const p = document.createElement("p");
-          const em = document.createElement("strong");
-          em.textContent = "Conclusion: ";
-          p.appendChild(em);
-          p.appendChild(document.createTextNode(concl.trim()));
-          li.appendChild(p);
-        }
-        ol.appendChild(li);
-      }
-      block.appendChild(ol);
+        body.appendChild(ol);
+      });
       root.appendChild(block);
     }
 
     const dims = evaluation.dimensions;
     if (dims && typeof dims === "object" && !Array.isArray(dims)) {
-      const section = document.createElement("section");
-      section.className = "ic-dimensions-section";
-      section.id = "ic-dimensions-section";
-      const h3 = document.createElement("h3");
-      h3.className = "dim-head";
-      h3.textContent = "Dimensions";
-      section.appendChild(h3);
-      const table = document.createElement("table");
-      table.className = "dim-table";
-      const thead = document.createElement("thead");
-      const hr = document.createElement("tr");
-      for (const label of ["Area", "Score", "Evidence", "Notes"]) {
-        const th = document.createElement("th");
-        th.textContent = label;
-        hr.appendChild(th);
-      }
-      thead.appendChild(hr);
-      table.appendChild(thead);
-      const tbody = document.createElement("tbody");
-      for (const [key, raw] of Object.entries(dims)) {
-        if (!raw || typeof raw !== "object") {
-          continue;
-        }
-        const dim = /** @type {Record<string, unknown>} */ (raw);
-        const tr = document.createElement("tr");
-        const tdName = document.createElement("td");
-        fillDimensionAreaCell(tdName, key);
-        const tdScore = document.createElement("td");
-        const sc = dim.score;
-        if (typeof sc === "number" && Number.isFinite(sc)) {
-          const span = document.createElement("span");
-          span.className = `dim-score ${dimScoreClass(sc)}`.trim();
-          span.textContent = String(sc);
-          const max = document.createElement("span");
-          max.className = "dim-max";
-          max.textContent = " / 5";
-          tdScore.appendChild(span);
-          tdScore.appendChild(max);
-        } else {
-          tdScore.textContent = "—";
-        }
-        const tdSuff = document.createElement("td");
-        tdSuff.className = "dim-sufficiency-cell";
-        const suff =
-          typeof dim.evidenceSufficiency === "string"
-            ? dim.evidenceSufficiency
-            : typeof dim.evidence_sufficiency === "string"
-              ? dim.evidence_sufficiency
-              : "";
-        tdSuff.textContent = suff ? suff.replace(/_/g, " ") : "—";
-        const tdRat = document.createElement("td");
-        fillDimensionNotesCell(tdRat, dim);
-        tr.appendChild(tdName);
-        tr.appendChild(tdScore);
-        tr.appendChild(tdSuff);
-        tr.appendChild(tdRat);
-        tbody.appendChild(tr);
-      }
-      table.appendChild(tbody);
-      section.appendChild(table);
-      root.appendChild(section);
+      root.appendChild(createDimensionsSection(dims, { richScores: true }));
     }
+  }
+
+  /**
+   * Missed opportunities + missed interviewer-friendly behaviors — rendered outside the
+   * main "Interview feedback" block, side-by-side when both are present.
+   * @param {HTMLElement} root
+   * @param {Record<string, unknown>} evaluation
+   */
+  function appendMissedOpportunitiesTwoColumn(root, evaluation) {
+    const missed = asStringArray(evaluation.missedOpportunities ?? evaluation.missed_opportunities);
+    const missedIv = asStringArray(
+      evaluation.missedInterviewerFriendlyBehaviors ?? evaluation.missed_interviewer_friendly_behaviors,
+    );
+    if (missed.length === 0 && missedIv.length === 0) {
+      return;
+    }
+
+    const section = document.createElement("section");
+    section.className = "ic-missed-pair-section";
+    const h3 = document.createElement("h3");
+    h3.className = "ic-missed-pair-heading";
+    h3.textContent = "🎯 Missed opportunities & interviewer rapport";
+    section.appendChild(h3);
+
+    const grid = document.createElement("div");
+    grid.className = "ic-missed-pair-grid";
+    if (!(missed.length > 0 && missedIv.length > 0)) {
+      grid.classList.add("ic-missed-pair-grid--single");
+    }
+
+    /**
+     * @param {string} title
+     * @param {string[]} lines
+     * @param {string} extraClass
+     */
+    function appendCol(title, lines, extraClass) {
+      if (lines.length === 0) {
+        return;
+      }
+      const col = document.createElement("div");
+      col.className = ["ic-missed-pair-col", "sess-missed-block", "ic-missed-block", extraClass].filter(Boolean).join(" ");
+      const h4 = document.createElement("h4");
+      h4.textContent = title;
+      col.appendChild(h4);
+      const ul = document.createElement("ul");
+      for (const line of lines) {
+        ul.appendChild(createMarkdownListItem(line));
+      }
+      col.appendChild(ul);
+      grid.appendChild(col);
+    }
+
+    appendCol("🚩 Missed opportunities", missed, "");
+    appendCol("🤝 Missed interviewer-friendly behaviors", missedIv, "");
+    section.appendChild(grid);
+    root.appendChild(section);
   }
 
   /**
@@ -705,11 +835,6 @@
   function appendEvaluationPlain(root, evaluation) {
     const strengths = asStringArray(evaluation.strengths);
     const weaknesses = asStringArray(evaluation.weaknesses);
-    const missed = asStringArray(evaluation.missedOpportunities ?? evaluation.missed_opportunities);
-    const missedIv = asStringArray(
-      evaluation.missedInterviewerFriendlyBehaviors ?? evaluation.missed_interviewer_friendly_behaviors,
-    );
-    const altPath = asStringArray(evaluation.alternativeStrongerPath ?? evaluation.alternative_stronger_path);
 
     function plainSection(title, text) {
       if (!text) {
@@ -724,17 +849,17 @@
       root.appendChild(p);
     }
 
-    plainSection("Final outcome", evalPickStr(evaluation, "finalOutcome", "final_outcome"));
-    plainSection("Interview process quality", evalPickStr(evaluation, "interviewProcessQuality", "interview_process_quality"));
-    plainSection("Hire signal", evalPickStr(evaluation, "hireSignalSummary", "hire_signal_summary"));
+    plainSection("🏁 Final outcome", evalPickStr(evaluation, "finalOutcome", "final_outcome"));
+    plainSection("⚙️ Interview process quality", evalPickStr(evaluation, "interviewProcessQuality", "interview_process_quality"));
+    plainSection("✨ Hire signal", evalPickStr(evaluation, "hireSignalSummary", "hire_signal_summary"));
     const pred = evalPickStr(evaluation, "roundOutcomePrediction", "round_outcome_prediction");
     if (pred) {
-      plainSection("Round prediction", pred.replace(/_/g, " "));
+      plainSection("🎯 Round prediction", pred.replace(/_/g, " "));
     }
 
     if (strengths.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Strengths";
+      h3.textContent = "💪 Strengths";
       root.appendChild(h3);
       const ul = document.createElement("ul");
       for (const s of strengths) {
@@ -745,7 +870,7 @@
 
     if (weaknesses.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Weaknesses";
+      h3.textContent = "📉 Weaknesses";
       root.appendChild(h3);
       const ul = document.createElement("ul");
       for (const s of weaknesses) {
@@ -753,33 +878,20 @@
       }
       root.appendChild(ul);
     }
+  }
 
-    if (missed.length > 0) {
-      const h3 = document.createElement("h3");
-      h3.textContent = "Missed opportunities";
-      root.appendChild(h3);
-      const ul = document.createElement("ul");
-      for (const s of missed) {
-        ul.appendChild(createMarkdownListItem(s));
-      }
-      root.appendChild(ul);
-    }
-
-    if (missedIv.length > 0) {
-      const h3 = document.createElement("h3");
-      h3.textContent = "Missed interviewer-friendly behaviors";
-      root.appendChild(h3);
-      const ul = document.createElement("ul");
-      for (const s of missedIv) {
-        ul.appendChild(createMarkdownListItem(s));
-      }
-      root.appendChild(ul);
-    }
+  /**
+   * Plain layout: sections after strengths/weaknesses (main column).
+   * @param {HTMLElement} root
+   * @param {Record<string, unknown>} evaluation
+   */
+  function appendEvaluationPlainContinuation(root, evaluation) {
+    const altPath = asStringArray(evaluation.alternativeStrongerPath ?? evaluation.alternative_stronger_path);
 
     const wtsd = evaluation.whatToSayDifferently ?? evaluation.what_to_say_differently;
     if (Array.isArray(wtsd) && wtsd.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "What to say differently";
+      h3.textContent = "💬 What to say differently";
       root.appendChild(h3);
       const ul = document.createElement("ul");
       for (const item of wtsd) {
@@ -811,7 +923,7 @@
     const prepRaw = evaluation.prepSuggestions ?? evaluation.prep_suggestions;
     if (Array.isArray(prepRaw) && prepRaw.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Prep suggestions";
+      h3.textContent = "📚 Prep suggestions";
       root.appendChild(h3);
       const ul = document.createElement("ul");
       for (const item of prepRaw) {
@@ -837,7 +949,7 @@
     const conflicts = evaluation.speechCodeConflicts ?? evaluation.speech_code_conflicts;
     if (Array.isArray(conflicts) && conflicts.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Speech vs code";
+      h3.textContent = "🎤 Speech vs code";
       root.appendChild(h3);
       for (const item of conflicts) {
         if (!item || typeof item !== "object") {
@@ -860,7 +972,7 @@
 
     if (altPath.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Alternative stronger path";
+      h3.textContent = "🛤️ Alternative stronger path";
       root.appendChild(h3);
       const ul = document.createElement("ul");
       for (const s of altPath) {
@@ -872,7 +984,7 @@
     const trace = evaluation.decisionTrace ?? evaluation.decision_trace;
     if (Array.isArray(trace) && trace.length > 0) {
       const h3 = document.createElement("h3");
-      h3.textContent = "Decision trace";
+      h3.textContent = "🔍 Decision trace";
       root.appendChild(h3);
       const ol = document.createElement("ol");
       for (const step of trace) {
@@ -881,16 +993,10 @@
         }
         const s = /** @type {Record<string, unknown>} */ (step);
         const li = document.createElement("li");
-        const bits = [
-          typeof s.step === "string" ? s.step : "",
-          typeof s.whatWasChecked === "string"
-            ? s.whatWasChecked
-            : typeof s.what_was_checked === "string"
-              ? s.what_was_checked
-              : "",
-          typeof s.conclusion === "string" ? s.conclusion : "",
-        ].filter((x) => x.trim());
-        li.textContent = bits.join(" — ");
+        const head = decisionTraceStepHeadline(s);
+        const concl = typeof s.conclusion === "string" ? s.conclusion.trim() : "";
+        const parts = [head, concl].filter(Boolean);
+        li.textContent = parts.join(" — ");
         ol.appendChild(li);
       }
       root.appendChild(ol);
@@ -898,62 +1004,40 @@
 
     const dims = evaluation.dimensions;
     if (dims && typeof dims === "object" && !Array.isArray(dims)) {
-      const h3 = document.createElement("h3");
-      h3.textContent = "Dimensions";
-      root.appendChild(h3);
-      const table = document.createElement("table");
-      table.className = "dim-table";
-      const thead = document.createElement("thead");
-      const hr = document.createElement("tr");
-      for (const label of ["Area", "Score", "Evidence", "Notes"]) {
-        const th = document.createElement("th");
-        th.textContent = label;
-        hr.appendChild(th);
-      }
-      thead.appendChild(hr);
-      table.appendChild(thead);
-      const tbody = document.createElement("tbody");
-      for (const [key, raw] of Object.entries(dims)) {
-        if (!raw || typeof raw !== "object") {
-          continue;
-        }
-        const dim = /** @type {Record<string, unknown>} */ (raw);
-        const tr = document.createElement("tr");
-        const tdName = document.createElement("td");
-        fillDimensionAreaCell(tdName, key);
-        const tdScore = document.createElement("td");
-        tdScore.textContent = typeof dim.score === "number" ? String(dim.score) : "—";
-        const tdSuff = document.createElement("td");
-        const suff =
-          typeof dim.evidenceSufficiency === "string"
-            ? dim.evidenceSufficiency
-            : typeof dim.evidence_sufficiency === "string"
-              ? dim.evidence_sufficiency
-              : "";
-        tdSuff.textContent = suff ? suff.replace(/_/g, " ") : "—";
-        const tdRat = document.createElement("td");
-        fillDimensionNotesCell(tdRat, dim);
-        tr.appendChild(tdName);
-        tr.appendChild(tdScore);
-        tr.appendChild(tdSuff);
-        tr.appendChild(tdRat);
-        tbody.appendChild(tr);
-      }
-      table.appendChild(tbody);
-      root.appendChild(table);
+      root.appendChild(createDimensionsSection(dims, { richScores: false }));
     }
   }
 
   /**
    * @param {HTMLElement} root
    * @param {{ result?: unknown } & Record<string, unknown>} data
-   * @param {{ omitInlineTranscriptionMeta?: boolean; richLayout?: boolean }} [options]
+   * @param {{
+   *   omitInlineTranscriptionMeta?: boolean;
+   *   richLayout?: boolean;
+   *   missedMount?: HTMLElement | null;
+   *   extendedMount?: HTMLElement | null;
+   * }} [options]
    */
   function renderInterviewGetResponse(root, data, options) {
     root.replaceChildren();
 
+    const missedMount = options?.missedMount ?? null;
+    const extendedMount = options?.extendedMount ?? null;
+    if (missedMount) {
+      missedMount.replaceChildren();
+    }
+    if (extendedMount) {
+      extendedMount.replaceChildren();
+    }
+
     const payload = data.result;
     if (!payload || typeof payload !== "object") {
+      if (missedMount) {
+        missedMount.classList.add("hidden");
+      }
+      if (extendedMount) {
+        extendedMount.classList.add("hidden");
+      }
       const pre = document.createElement("pre");
       pre.className = "raw";
       pre.textContent = JSON.stringify(data, null, 2);
@@ -972,7 +1056,7 @@
         : null;
 
     const h2 = document.createElement("h2");
-    h2.textContent = "Interview feedback";
+    h2.textContent = "📋 Interview feedback";
     root.appendChild(h2);
 
     if (evaluation && typeof evaluation.summary === "string" && evaluation.summary.trim()) {
@@ -996,7 +1080,7 @@
       }
       if (parts.length > 0) {
         const h3 = document.createElement("h3");
-        h3.textContent = "Transcription";
+        h3.textContent = "📝 Transcription";
         root.appendChild(h3);
         const pEl = document.createElement("p");
         pEl.className = "summary";
@@ -1011,11 +1095,31 @@
       } else {
         appendEvaluationPlain(root, evaluation);
       }
+      const missedRoot = missedMount ?? root;
+      appendMissedOpportunitiesTwoColumn(missedRoot, evaluation);
+      if (missedMount) {
+        missedMount.classList.toggle("hidden", missedMount.childNodes.length === 0);
+      }
+      if (extendedMount) {
+        if (richLayout) {
+          appendEvaluationRichContinuation(extendedMount, evaluation);
+        } else {
+          appendEvaluationPlainContinuation(extendedMount, evaluation);
+        }
+        extendedMount.classList.toggle("hidden", extendedMount.childNodes.length === 0);
+      }
+    } else {
+      if (missedMount) {
+        missedMount.classList.add("hidden");
+      }
+      if (extendedMount) {
+        extendedMount.classList.add("hidden");
+      }
     }
 
     const details = document.createElement("details");
     const summ = document.createElement("summary");
-    summ.textContent = "Full result JSON";
+    summ.textContent = "📦 Full result JSON";
     details.appendChild(summ);
     const pre = document.createElement("pre");
     pre.className = "raw";
@@ -1026,6 +1130,12 @@
     const mdSweep = window.InterviewCopilotMarkdown;
     if (mdSweep && typeof mdSweep.highlightFencesIn === "function") {
       mdSweep.highlightFencesIn(root);
+      if (missedMount && missedMount.childNodes.length > 0) {
+        mdSweep.highlightFencesIn(missedMount);
+      }
+      if (extendedMount && extendedMount.childNodes.length > 0) {
+        mdSweep.highlightFencesIn(extendedMount);
+      }
     }
   }
 
