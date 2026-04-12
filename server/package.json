@@ -36,7 +36,7 @@
     "@fastify/cors": "^10.0.1",
     "@fastify/multipart": "^9.0.1",
     "@fastify/websocket": "^11.2.0",
-    "@google/genai": "^1.48.0",
+    "@google/genai": "^1.49.0",
     "@libsql/client": "^0.17.2",
     "@prisma/adapter-libsql": "^7.6.0",
     "@prisma/client": "^7.6.0",
