@@ -17,6 +17,7 @@ const micCaptureStatusEl = document.getElementById("micCaptureStatus");
 const analysisPulseEl = document.getElementById("analysisPulse");
 const btnSideSettings = document.getElementById("btnSideSettings");
 const btnSideHelp = document.getElementById("btnSideHelp");
+const btnSideTheme = document.getElementById("btnSideTheme");
 const sideSettingsPanel = document.getElementById("sideSettingsPanel");
 const sideHelpPanel = document.getElementById("sideHelpPanel");
 
@@ -1484,5 +1485,31 @@ async function init() {
     stopTabCapture();
   });
 }
+
+function syncSidepanelThemeToggleUi() {
+  if (!btnSideTheme || typeof window.ICTheme === "undefined") {
+    return;
+  }
+  const dark = window.ICTheme.get() === "dark";
+  const icon = btnSideTheme.querySelector(".material-symbols-outlined");
+  if (icon) {
+    icon.textContent = dark ? "light_mode" : "dark_mode";
+  }
+  btnSideTheme.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  btnSideTheme.setAttribute("aria-label", btnSideTheme.title);
+}
+
+btnSideTheme?.addEventListener("click", () => {
+  window.ICTheme?.toggle();
+  syncSidepanelThemeToggleUi();
+});
+document.addEventListener("ic-theme-change", syncSidepanelThemeToggleUi);
+window.addEventListener("storage", (e) => {
+  if (e.key === window.ICTheme?.STORAGE_KEY && e.newValue) {
+    window.ICTheme?.syncFromStorage();
+    syncSidepanelThemeToggleUi();
+  }
+});
+syncSidepanelThemeToggleUi();
 
 void init();

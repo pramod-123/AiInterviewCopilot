@@ -33,6 +33,38 @@ const momentByMomentLines = document.getElementById("momentByMomentLines");
 const footJumpVideo = document.getElementById("footJumpVideo");
 const footJumpTranscript = document.getElementById("footJumpTranscript");
 const footJumpDims = document.getElementById("footJumpDims");
+const btnThemeToggle = document.getElementById("btnThemeToggle");
+
+function syncSessionsThemeToggleUi() {
+  if (!btnThemeToggle || typeof window.ICTheme === "undefined") {
+    return;
+  }
+  const dark = window.ICTheme.get() === "dark";
+  const icon = btnThemeToggle.querySelector(".material-icons-round");
+  if (icon) {
+    icon.textContent = dark ? "light_mode" : "dark_mode";
+  }
+  btnThemeToggle.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  btnThemeToggle.setAttribute("aria-label", btnThemeToggle.title);
+}
+
+btnThemeToggle?.addEventListener("click", () => {
+  window.ICTheme?.toggle();
+  syncSessionsThemeToggleUi();
+});
+
+document.addEventListener("ic-theme-change", () => {
+  syncSessionsThemeToggleUi();
+});
+
+window.addEventListener("storage", (e) => {
+  if (e.key === window.ICTheme?.STORAGE_KEY && e.newValue) {
+    window.ICTheme?.syncFromStorage();
+    syncSessionsThemeToggleUi();
+  }
+});
+
+syncSessionsThemeToggleUi();
 
 /** @type {WebSocket | null} */
 let postProcessWebSocket = null;

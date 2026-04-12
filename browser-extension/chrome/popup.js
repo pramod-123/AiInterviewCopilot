@@ -177,4 +177,31 @@ document.getElementById("btnHelp")?.addEventListener("click", () => {
   btn?.setAttribute("aria-expanded", open ? "true" : "false");
 });
 
+function syncPopupThemeToggleUi() {
+  const btn = document.getElementById("btnPopupTheme");
+  if (!btn || typeof window.ICTheme === "undefined") {
+    return;
+  }
+  const dark = window.ICTheme.get() === "dark";
+  const icon = btn.querySelector(".material-symbols-outlined");
+  if (icon) {
+    icon.textContent = dark ? "light_mode" : "dark_mode";
+  }
+  btn.title = dark ? "Switch to light mode" : "Switch to dark mode";
+  btn.setAttribute("aria-label", btn.title);
+}
+
+document.getElementById("btnPopupTheme")?.addEventListener("click", () => {
+  window.ICTheme?.toggle();
+  syncPopupThemeToggleUi();
+});
+document.addEventListener("ic-theme-change", syncPopupThemeToggleUi);
+window.addEventListener("storage", (e) => {
+  if (e.key === window.ICTheme?.STORAGE_KEY && e.newValue) {
+    window.ICTheme?.syncFromStorage();
+    syncPopupThemeToggleUi();
+  }
+});
+syncPopupThemeToggleUi();
+
 void loadSettings();

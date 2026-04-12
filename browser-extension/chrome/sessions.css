@@ -3,19 +3,6 @@
   --primary-rgb: 144, 70, 255;
   --primary: #9046ff;
   --primary-soft: #c6a0ff;
-  --primary-muted: rgba(var(--primary-rgb), 0.14);
-  /* Page canvas: kiro black-900; surfaces use prey-800 for cards / chrome */
-  --page-bg: #000000;
-  --bg-dark: #000000;
-  --surface-dark: #211d25;
-  --border-dark: #352f3d;
-  --text: #f2f1f4;
-  --text-muted: #938f9b;
-  --text-dim: #5e5966;
-  --rose: #fb7185;
-  --amber: #fbbf24;
-  --sess-skel-a: #211d25;
-  --sess-skel-b: #28242e;
   /* Rhythm — prefer these over one-off values in new UI */
   --ui-font-body: 0.85rem;
   --ui-font-caption: 0.72rem;
@@ -28,11 +15,26 @@
   --ui-space-4: 16px;
   --ui-duration: 0.15s;
   --ui-ease: ease;
-  --ui-focus-ring: 0 0 0 2px var(--primary-muted);
-  --ui-focus-outline: 2px solid var(--primary);
-  /* Glassmorphism — frosted panels over the page gradient */
   --glass-blur: 20px;
   --glass-saturate: 1.35;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --primary-muted: rgba(var(--primary-rgb), 0.14);
+  --page-bg: #000000;
+  --bg-dark: #000000;
+  --surface-dark: #211d25;
+  --border-dark: #352f3d;
+  --text: #f2f1f4;
+  --text-muted: #938f9b;
+  --text-dim: #5e5966;
+  --rose: #fb7185;
+  --amber: #fbbf24;
+  --sess-skel-a: #211d25;
+  --sess-skel-b: #28242e;
+  --ui-focus-ring: 0 0 0 2px var(--primary-muted);
+  --ui-focus-outline: 2px solid var(--primary);
   --glass-bg: rgba(33, 29, 37, 0.52);
   --glass-bg-deep: rgba(18, 15, 24, 0.65);
   --glass-bg-chrome: rgba(12, 10, 16, 0.55);
@@ -40,6 +42,52 @@
   --glass-border-soft: rgba(255, 255, 255, 0.06);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.42);
+  --code-bg: #1d1f21;
+  --code-border: #3e4451;
+  --code-toolbar-bg: #050506;
+  --chrome-solid: rgba(12, 10, 16, 0.94);
+  --panel-summary-bg: rgba(0, 0, 0, 0.18);
+  --eval-panel-header-bg: rgba(255, 255, 255, 0.045);
+  --sidebar-toggle-hover-border: #3f3f46;
+  --sidebar-toggle-hover-bg: rgba(22, 22, 24, 0.9);
+  --surface-raised: rgba(10, 10, 11, 0.55);
+  --dim-thead-bg: rgba(10, 10, 11, 0.6);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --primary-muted: rgba(var(--primary-rgb), 0.12);
+  --page-bg: #f5f3f9;
+  --bg-dark: #ebe6f2;
+  --surface-dark: #ffffff;
+  --border-dark: #d8d0e4;
+  --text: #18141f;
+  --text-muted: #5d5670;
+  --text-dim: #8a8496;
+  --rose: #e11d48;
+  --amber: #d97706;
+  --sess-skel-a: #e8e4ef;
+  --sess-skel-b: #ded8e8;
+  --ui-focus-ring: 0 0 0 2px rgba(var(--primary-rgb), 0.22);
+  --ui-focus-outline: 2px solid var(--primary);
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-deep: rgba(255, 255, 255, 0.9);
+  --glass-bg-chrome: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(24, 20, 32, 0.1);
+  --glass-border-soft: rgba(24, 20, 32, 0.06);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 12px 40px rgba(80, 60, 140, 0.12);
+  /* Keep code surfaces dark so Prism / snippets stay readable in light UI */
+  --code-bg: #1d1f21;
+  --code-border: #3e4451;
+  --code-toolbar-bg: #050506;
+  --chrome-solid: rgba(252, 251, 254, 0.97);
+  --panel-summary-bg: rgba(0, 0, 0, 0.045);
+  --eval-panel-header-bg: rgba(0, 0, 0, 0.04);
+  --sidebar-toggle-hover-border: #c4bdd4;
+  --sidebar-toggle-hover-bg: rgba(0, 0, 0, 0.04);
+  --surface-raised: rgba(0, 0, 0, 0.04);
+  --dim-thead-bg: rgba(0, 0, 0, 0.06);
 }
 
 *,
@@ -48,16 +96,25 @@
   box-sizing: border-box;
 }
 
-html.dark {
+html[data-theme="dark"],
+html[data-theme="light"] {
   height: 100%;
-  color-scheme: dark;
 }
 
-html.dark,
-html.dark body {
+html[data-theme="dark"],
+html[data-theme="dark"] body {
   background:
     radial-gradient(120% 70% at 50% -24%, rgba(144, 70, 255, 0.09) 0%, transparent 46%),
     radial-gradient(90% 52% at 100% 0%, rgba(198, 160, 255, 0.035) 0%, transparent 38%),
+    var(--page-bg);
+  color: var(--text);
+}
+
+html[data-theme="light"],
+html[data-theme="light"] body {
+  background:
+    radial-gradient(110% 65% at 50% -18%, rgba(144, 70, 255, 0.08) 0%, transparent 48%),
+    radial-gradient(90% 45% at 100% 0%, rgba(144, 70, 255, 0.04) 0%, transparent 40%),
     var(--page-bg);
   color: var(--text);
 }
@@ -182,6 +239,39 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.sess-theme-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background var(--ui-duration) var(--ui-ease),
+    color var(--ui-duration) var(--ui-ease);
+}
+
+.sess-theme-btn:hover {
+  background: var(--primary-muted);
+  color: var(--text);
+}
+
+.sess-theme-btn:focus {
+  outline: none;
+}
+
+.sess-theme-btn:focus-visible {
+  outline: var(--ui-focus-outline);
+  outline-offset: 2px;
+}
+
+.sess-theme-btn .material-icons-round {
+  font-size: 22px;
 }
 
 /* Toolbar */
@@ -413,8 +503,8 @@ body {
 
 .sess-sidebar-toggle:hover {
   color: var(--text);
-  border-color: #3f3f46;
-  background: rgba(22, 22, 24, 0.9);
+  border-color: var(--sidebar-toggle-hover-border);
+  background: var(--sidebar-toggle-hover-bg);
 }
 
 .sess-sidebar-toggle:focus-visible {
@@ -740,23 +830,23 @@ body {
 }
 
 .md-content .md-inline-code.language-java {
-  background: rgba(29, 31, 33, 0.92);
-  border-color: #3e4451;
+  background: var(--code-bg);
+  border-color: var(--code-border);
 }
 
 .md-content .md-fence {
   margin: 0.65em 0;
   padding: 12px 14px;
   border-radius: 10px;
-  background: #1d1f21;
-  border: 1px solid #3e4451;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 /* Plain fences (no language tag in source) */
 .md-content .md-fence:not([class*="language-"]) {
-  background: #050506;
+  background: var(--code-toolbar-bg);
   border-color: var(--border-dark);
 }
 
@@ -1097,7 +1187,7 @@ body {
 .sess-moment-item {
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(10, 10, 11, 0.55);
+  background: var(--surface-raised);
   border: 1px solid var(--border-dark);
 }
 
@@ -1550,7 +1640,7 @@ body {
   margin: 0;
   padding: 10px 12px;
   border-bottom: 1px solid var(--glass-border-soft);
-  background: rgba(255, 255, 255, 0.045);
+  background: var(--eval-panel-header-bg);
   backdrop-filter: blur(12px) saturate(1.15);
   -webkit-backdrop-filter: blur(12px) saturate(1.15);
   font-size: 0.65rem;
@@ -1796,7 +1886,7 @@ body {
 }
 
 .ic-dimensions-section .dim-table thead tr {
-  background: rgba(10, 10, 11, 0.6);
+  background: var(--dim-thead-bg);
   color: var(--text-dim);
   font-size: 0.65rem;
   font-weight: 800;
@@ -1908,8 +1998,8 @@ body {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.72rem;
   line-height: 1.45;
-  background: #1d1f21;
-  border: 1px solid #3e4451;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1926,7 +2016,7 @@ body {
   font-size: 0.72rem;
   line-height: 1.45;
   color: #e4e4e7;
-  background: #050506;
+  background: var(--code-toolbar-bg);
   border: 1px solid var(--border-dark);
   white-space: pre-wrap;
   word-break: break-word;
@@ -1947,8 +2037,8 @@ body {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 0.72rem;
   line-height: 1.45;
-  background: #1d1f21;
-  border: 1px solid #3e4451;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1983,7 +2073,7 @@ body {
   font-size: 0.72rem;
   line-height: 1.45;
   color: #e4e4e7;
-  background: #050506;
+  background: var(--code-toolbar-bg);
   border: 1px solid var(--border-dark);
   white-space: pre-wrap;
   word-break: break-word;
@@ -2179,7 +2269,7 @@ body {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover,
 #transcriptLines::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--sidebar-toggle-hover-border);
 }
 
 /* Post-process placeholders (skeleton / shimmer) */
@@ -2290,7 +2380,7 @@ body {
 
   .sess-header,
   .sess-footer {
-    background: rgba(0, 0, 0, 0.92);
+    background: var(--chrome-solid);
   }
 
   .sess-toolbar {
@@ -2326,7 +2416,7 @@ body {
   .sess-dimensions-wrap .ic-eval-list-panel > summary.ic-eval-list-panel-summary {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
-    background: rgba(0, 0, 0, 0.18);
+    background: var(--panel-summary-bg);
     border-bottom-color: var(--border-dark);
   }
 

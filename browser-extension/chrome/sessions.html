@@ -1,8 +1,9 @@
 <!doctype html>
-<html class="dark" lang="en">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="theme.js"></script>
     <title>AI Interview Copilot — Session results</title>
     <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -28,7 +29,17 @@
           <span class="is-active">Sessions</span>
           <span class="sess-nav-placeholder">Performance</span>
         </nav>
-        <div class="sess-header-tools" aria-hidden="true"></div>
+        <div class="sess-header-tools">
+          <button
+            type="button"
+            class="sess-theme-btn"
+            id="btnThemeToggle"
+            title="Appearance"
+            aria-label="Toggle light and dark mode"
+          >
+            <span class="material-icons-round" aria-hidden="true">light_mode</span>
+          </button>
+        </div>
       </div>
     </header>
 

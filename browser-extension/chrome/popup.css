@@ -3,6 +3,12 @@
   --primary-rgb: 144, 70, 255;
   --primary: #9046ff;
   --primary-soft: #c6a0ff;
+  --glass-blur: 16px;
+  --glass-saturate: 1.3;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
   --primary-container: rgba(var(--primary-rgb), 0.16);
   --outline: #5e5966;
   --on-surface-variant: #938f9b;
@@ -16,13 +22,35 @@
   --on-primary: #ffffff;
   --error: #f94359;
   --background: #000000;
-  --glass-blur: 16px;
-  --glass-saturate: 1.3;
   --glass-bg: rgba(33, 29, 37, 0.55);
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-border-soft: rgba(255, 255, 255, 0.06);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+  --popup-header-bg: rgba(25, 22, 29, 0.72);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --primary-container: rgba(var(--primary-rgb), 0.14);
+  --outline: #8a8496;
+  --on-surface-variant: #5d5670;
+  --surface-bright: #cfc8dc;
+  --surface-container-high: #e4dfee;
+  --surface-container-highest: #d8d2e4;
+  --surface: #ede8f4;
+  --on-surface: #18141f;
+  --surface-low: #ffffff;
+  --outline-variant: #cfc6dc;
+  --on-primary: #ffffff;
+  --error: #f94359;
+  --background: #f5f3f9;
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(24, 20, 32, 0.1);
+  --glass-border-soft: rgba(24, 20, 32, 0.06);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 8px 28px rgba(80, 60, 140, 0.12);
+  --popup-header-bg: rgba(255, 255, 255, 0.88);
 }
 
 .material-symbols-outlined {
@@ -52,7 +80,8 @@
 }
 
 /* Rounded popup shell — set on both html and body so Chrome clips content reliably */
-html.dark {
+html[data-theme="dark"],
+html[data-theme="light"] {
   margin: 0;
   padding: 0;
   border-radius: 16px;
@@ -60,14 +89,22 @@ html.dark {
   background: var(--background);
 }
 
-html.dark,
-html.dark body {
+html[data-theme="dark"],
+html[data-theme="dark"] body,
+html[data-theme="light"],
+html[data-theme="light"] body {
   color: var(--on-surface);
 }
 
-html.dark body {
+html[data-theme="dark"] body {
   background:
     radial-gradient(120% 90% at 50% -20%, rgba(144, 70, 255, 0.07) 0%, transparent 45%),
+    var(--background);
+}
+
+html[data-theme="light"] body {
+  background:
+    radial-gradient(120% 85% at 50% -18%, rgba(144, 70, 255, 0.08) 0%, transparent 46%),
     var(--background);
 }
 
@@ -88,7 +125,7 @@ body {
 
 /* Header */
 .popup-header {
-  background: rgba(25, 22, 29, 0.72);
+  background: var(--popup-header-bg);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   color: var(--on-surface);
