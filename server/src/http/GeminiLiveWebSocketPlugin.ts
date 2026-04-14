@@ -384,7 +384,7 @@ export class GeminiLiveWebSocketPlugin {
                 GeminiLiveWebSocketPlugin.safeSend(socket, p);
               }
               const anchor = bridgeOpenedAtWallMs;
-              anchor != null &&
+              if (anchor != null) {
                 void Promise.all(
                   payloads.map((p) =>
                     p.type === "inputTranscription" && typeof p.text === "string"
@@ -413,6 +413,7 @@ export class GeminiLiveWebSocketPlugin {
                           : Promise.resolve(),
                   ),
                 ).catch(() => {});
+              }
             },
             onerror: (e) => {
               log.warn({ sessionId, model, payload: e }, "gemini live: onerror");

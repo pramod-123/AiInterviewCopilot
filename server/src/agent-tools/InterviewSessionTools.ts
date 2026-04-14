@@ -15,6 +15,13 @@ export type GetCodeAtData = {
   clampedToEarliest: boolean;
 };
 
+/** Latest editor snapshot at end of capture timeline (for `get_latest_code_snippet` / Live tools). */
+export type GetLatestCodeSnippetData = {
+  text: string;
+  offsetSeconds: number;
+  sequence: number;
+};
+
 /** Live session row summary for agents (no full question text — use {@link IInterviewSessionTools.getQuestion}). */
 export type SessionMetadataData = {
   id: string;
@@ -50,6 +57,8 @@ export interface IInterviewSessionTools {
   getSessionMetadata(sessionId: string): Promise<ToolResult<SessionMetadataData>>;
   /** `timestampSec` aligns with live code snapshot `offsetSeconds` (seconds since tab capture start). */
   getCodeAt(sessionId: string, timestampSec: number): Promise<ToolResult<GetCodeAtData>>;
+  /** Newest stored editor snapshot for the session (by `offsetSeconds`, then `sequence`). */
+  getLatestCodeSnippet(sessionId: string): Promise<ToolResult<GetLatestCodeSnippetData>>;
   /**
    * Ordered full editor snapshots between times (seconds on the same timeline as `getCodeAt`).
    * Spec name `start_id` is interpreted as **start time in seconds** (`startTimeSec`).
@@ -139,6 +148,26 @@ export class DaoInterviewSessionTools implements IInterviewSessionTools {
         text: row.code,
         offsetSeconds: row.offsetSeconds,
         clampedToEarliest: false,
+      },
+    };
+  }
+
+  async getLatestCodeSnippet(sessionId: string): Promise<ToolResult<GetLatestCodeSnippetData>> {
+    const session = await this.db.findLiveSessionIdForTools(sessionId);
+    if (!session) {
+      return toolErr("Session not found.");
+    }
+    const all = sortLiveSnapshots(await this.db.findLiveCodeSnapshotsForSession(sessionId));
+    if (all.length === 0) {
+      return toolErr("No code snapshots for this session.");
+    }
+    const last = all[all.length - 1]!;
+    return {
+      ok: true,
+      data: {
+        text: last.code,
+        offsetSeconds: last.offsetSeconds,
+        sequence: last.sequence,
       },
     };
   }

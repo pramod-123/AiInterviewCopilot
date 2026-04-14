@@ -139,6 +139,25 @@ describe("DaoInterviewSessionTools", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("getLatestCodeSnippet returns last snapshot by time then sequence", async () => {
+    const findLiveCodeSnapshotsForSession = vi.fn().mockResolvedValue([
+      { code: "a", offsetSeconds: 0, sequence: 0 },
+      { code: "b", offsetSeconds: 10, sequence: 0 },
+      { code: "c", offsetSeconds: 10, sequence: 1 },
+    ]);
+    const db = mockDb({
+      findLiveSessionIdForTools: vi.fn().mockResolvedValue({ id: "s1" }),
+      findLiveCodeSnapshotsForSession,
+    });
+    const tools = new DaoInterviewSessionTools(db);
+    const r = await tools.getLatestCodeSnippet("s1");
+    expect(r).toEqual({
+      ok: true,
+      data: { text: "c", offsetSeconds: 10, sequence: 1 },
+    });
+    expect(findLiveCodeSnapshotsForSession).toHaveBeenCalledWith("s1");
+  });
+
   it("getCodeProgressionInTimeRange returns full text per snapshot in window", async () => {
     const db = mockDb({
       findLiveSessionIdForTools: vi.fn().mockResolvedValue({ id: "s1" }),
