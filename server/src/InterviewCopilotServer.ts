@@ -3,7 +3,7 @@ import multipart from "@fastify/multipart";
 import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance } from "fastify";
 import { appDao, runAppTransaction } from "./db.js";
-import { buildFastifyLoggerOptions } from "./logging/buildFastifyLoggerOptions.js";
+import { buildFastifyLogger } from "./logging/buildFastifyLogger.js";
 import { appFileStore } from "./appFileStore.js";
 import { JobRoutesController } from "./http/JobRoutesController.js";
 import { LiveSessionRoutesController } from "./http/LiveSessionRoutesController.js";
@@ -30,7 +30,7 @@ export class InterviewCopilotServer {
     speechToTextFactory?: SpeechToTextServiceFactory,
     evaluationFactory?: InterviewEvaluationServiceFactory,
   ) {
-    this.app = Fastify({ logger: buildFastifyLoggerOptions() });
+    this.app = Fastify({ loggerInstance: buildFastifyLogger() });
     this.paths = new AppPaths();
     this.speechToTextFactory = speechToTextFactory ?? new SpeechToTextServiceFactory();
     this.evaluationFactory =

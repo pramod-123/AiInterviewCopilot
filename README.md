@@ -26,10 +26,10 @@ The **Chrome** extension under **`browser-extension/chrome/`** starts sessions f
 
 ### Option A — Release installer (recommended for end users)
 
-**One command** (no env vars): installs under `~/.local/share/ai-interview-copilot` from **`pramod-123/AiInterviewCopilot`** **`latest`** release, using the **public GitHub API** (no GitHub token). Piped installs skip heavy WhisperX/local-Whisper venvs by default; add API keys in the install dir `.env` afterward, or run `./install.sh` from a terminal for full interactive setup.
+**One command** (no env vars): installs under `~/.local/share/ai-interview-copilot` from **`pramod-123/AiInterviewCopilot`** **`latest`** release, using the **public GitHub API** (no GitHub token). This form keeps interactive prompts (LLM provider + API keys) in a normal terminal.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh)"
 ```
 
 From a **clone** (interactive: keys, LLM menu, optional venvs):
@@ -38,17 +38,7 @@ From a **clone** (interactive: keys, LLM menu, optional venvs):
 ./install.sh
 ```
 
-### Option B — GitHub release script (minimal)
-
-If you only want the **pre-built server tarball** unpacked and Prisma applied:
-
-```bash
-AI_INTERVIEW_COPILOT_REPO=owner/name ./scripts/install-from-github-release.sh [--prefix DIR] [--brew] [--no-run]
-```
-
-Same public-API behavior: **no GitHub token**.
-
-### Option C — Developers (from this repo)
+### Option B — Developers (from this repo)
 
 ```bash
 ./install-dev.sh          # npm ci, prisma, start dev server (optional: --brew on macOS for ffmpeg)
@@ -72,6 +62,28 @@ npm run dev
 ```
 
 Server listens on `http://127.0.0.1:3001` by default (`PORT` / `HOST` in `.env`).
+
+## API keys and tokens
+
+Set these in `server/.env` (or via installer prompts) depending on your provider choices:
+
+- `OPENAI_API_KEY` (recommended default): used for remote STT (`whisper-1`) and OpenAI-backed evaluation.
+- `ANTHROPIC_API_KEY` (optional): used when `LLM_PROVIDER=anthropic`.
+- `HF_TOKEN` (optional but recommended for WhisperX diarization): Hugging Face token used by pyannote/WhisperX flows.
+- `GEMINI_API_KEY` (optional): enables Gemini Live WebSocket interviewer features.
+
+Where to get each key:
+
+- OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+- Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- Hugging Face: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- Gemini (Google AI Studio): [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+
+Notes:
+
+- If you use Anthropic for evaluation, set `LLM_PROVIDER=anthropic`.
+- If you use local STT, set `STT_PROVIDER=local` and keep `LOCAL_WHISPER_EXECUTABLE` configured.
+- Keep `.env` private and never commit real keys.
 
 ## Browser extension (LeetCode live capture)
 

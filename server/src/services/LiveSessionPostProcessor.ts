@@ -276,7 +276,7 @@ export class LiveSessionPostProcessor {
             anchorDeltaMs: stitched.anchorDeltaMs,
             chunkCount: stitched.chunkCount,
           };
-          this.log.info(
+          this.log.debug(
             { sessionId, jobId, geminiChunks: stitched.chunkCount },
             "Gemini interviewer audio stitched, mixed into dialogue.webm, and copied to recording.webm for playback.",
           );
@@ -312,7 +312,7 @@ export class LiveSessionPostProcessor {
         transcriptSource = "gemini_live_realtime";
         geminiUtterancesForRows = geminiBundle.utterances;
         transcription = speechTranscriptionFromGeminiUtterances(geminiBundle.utterances);
-        this.log.info(
+        this.log.debug(
           { sessionId, jobId, segments: transcription.segments.length },
           "Live session transcript from Gemini Live realtime (input/output transcription).",
         );
@@ -324,7 +324,7 @@ export class LiveSessionPostProcessor {
         if (d && d.segments.length > 0) {
           diarization = d;
           transcription = speechTranscriptionFromWhisperXSrt(d);
-          this.log.info(
+          this.log.debug(
             {
               sessionId,
               jobId,
@@ -392,7 +392,7 @@ export class LiveSessionPostProcessor {
           });
           if (d) {
             diarization = d;
-            this.log.info(
+            this.log.debug(
               { sessionId, jobId, segments: d.segmentCount, audioSource: d.audioSource, provider: d.provider },
               "SRT generation with speaker labels completed.",
             );

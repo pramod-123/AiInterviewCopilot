@@ -1,5 +1,5 @@
 /**
- * Small, pure helpers for size-safe structured logging (Pino / Fastify).
+ * Small, pure helpers for size-safe structured logging (Winston / Fastify).
  */
 
 /** Safe string length for log metadata; non-strings → 0. */

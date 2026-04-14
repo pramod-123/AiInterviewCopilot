@@ -113,7 +113,7 @@ Ids to map (keys required): ${JSON.stringify(unique)}`;
     }
 
     const remapped = applySpeakerRoleMappingToSrtResult(result, mapping);
-    this.log.info(
+    this.log.debug(
       { mapping, segmentCount: remapped.segmentCount },
       "WhisperX speaker ids mapped to INTERVIEWER / INTERVIEWEE.",
     );

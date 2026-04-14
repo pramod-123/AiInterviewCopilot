@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 #
 # Installer: GitHub Releases (server tarball + Chrome extension), host dependencies
-# (Node 20+, ffmpeg/ffprobe, Python, unzip), optional Python venvs, Prisma.
+# (Node 20+, ffmpeg/ffprobe, Python, unzip), Python venvs (WhisperX + local Whisper), Prisma.
 #
-# One-liner (no env vars; public GitHub API; stdin is the script — auto non-interactive):
+# One-liner (public GitHub API):
 #   curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh | bash
+# Same install, stdin stays your terminal (menus / prompts behave like ./install.sh):
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh)"
+# Fully unattended (CI / no TTY): secrets must be passed via env; installer auto-yes without prompts.
 #
-# From a clone (TTY): prompts for API keys / menus; y/n as usual unless INSTALL_CONSUMER_YES=1.
+# From a clone (stdin is a TTY): same prompts; y/n as usual unless INSTALL_CONSUMER_YES=1.
 #   ./install.sh
 #
 # Developers from git should use ./install-dev.sh (npm in server/, dev server).
@@ -17,7 +20,6 @@
 #   INSTALL_PREFIX              default ~/.local/share/ai-interview-copilot
 #   INSTALL_CONSUMER_YES        if 1: all y/n yes; secrets only from env (no prompts)
 #   INSTALL_INTERACTIVE         if 1: prompt for repo, tag, install path (defaults still shown)
-#   INSTALL_SKIP_PYTHON_VENVS   if 1, skip WhisperX / local Whisper venv (also default on piped install)
 #   INSTALL_CONSUMER_START_SERVER  if 1 with INSTALL_CONSUMER_YES, start API after install
 #   NO_COLOR / INSTALL_NO_COLOR   if set, disable ANSI styling (see https://no-color.org/)
 #   INSTALL_NO_CURL_PROGRESS      if set, hide curl transfer bar for large downloads
@@ -35,10 +37,14 @@ REPO="${AI_INTERVIEW_COPILOT_REPO:-pramod-123/AiInterviewCopilot}"
 RELEASE_TAG="${RELEASE_TAG:-latest}"
 INSTALL_PREFIX="${INSTALL_PREFIX:-"${HOME}/.local/share/ai-interview-copilot"}"
 RUN_SERVER_AFTER=false
-# curl … | bash: stdin is the script, not a TTY — use non-interactive defaults (no env needed).
+# curl … | bash: stdin is the script, so it must not be used for prompts (would consume the script).
+# If there is no usable controlling terminal (typical CI), default to fully non-interactive: auto-yes
+# all y/n and take API keys only from the environment. In a normal Terminal, /dev/tty exists — we do not
+# force INSTALL_CONSUMER_YES, so prompt()/read_secret_prompt on /dev/tty restores interactive keys.
 if [[ ! -t 0 ]]; then
-  INSTALL_CONSUMER_YES="${INSTALL_CONSUMER_YES:-1}"
-  INSTALL_SKIP_PYTHON_VENVS="${INSTALL_SKIP_PYTHON_VENVS:-1}"
+  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+    INSTALL_CONSUMER_YES="${INSTALL_CONSUMER_YES:-1}"
+  fi
 fi
 AUTO_YES="${INSTALL_CONSUMER_YES:-}"
 
@@ -175,7 +181,7 @@ install_welcome() {
   printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_DIM}" "Installer · ${VERSION_WIRED}" "${C_ACCENT_B}" "${C_RST}"
   printf '%b╚══════════════════════════════════════════════════════════════╝%b\n' "${C_ACCENT_B}" "${C_RST}"
   say ""
-  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · optional Python venvs · SQLite & .env"
+  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · Python venvs (WhisperX + Whisper) · SQLite & .env"
   say ""
 }
 
@@ -207,13 +213,11 @@ prompt_yn() {
   [[ "$r" == y || "$r" == yes ]]
 }
 
-# Read API key without echoing (stdout is the key only; newline goes to tty).
-# In non-interactive mode (AUTO_YES=1), pass secrets via environment variables instead.
+# Read API key from /dev/tty (echoed — paste is easier to verify).
 read_secret_prompt() {
   local prompt_text="$1"
   local val=""
-  read -r -s -p "${C_PROMPT}${prompt_text}${C_DIM} (hidden):${C_RST} " val </dev/tty || true
-  printf '\n' >/dev/tty
+  read -r -p "${C_PROMPT}${prompt_text}${C_DIM}:${C_RST} " val </dev/tty || true
   printf '%s' "$val"
 }
 
@@ -722,7 +726,7 @@ main() {
       say "${C_ACCENT}Choose LLM vendor:${C_RST} arrow keys or ${C_BOLD}1${C_RST} / ${C_BOLD}2${C_RST}, then Enter."
       choose_llm_provider_menu || true
     else
-      say_warn "No TTY for menu; falling back to OpenAI. Set LLM_PROVIDER in .env if you need Anthropic."
+      say_warn "No TTY for menu; defaulting to OpenAI. Set LLM_PROVIDER=anthropic before running to force Anthropic."
       choose_llm_index=0
     fi
     if [[ "${choose_llm_index}" -eq 1 ]]; then
@@ -747,6 +751,12 @@ main() {
     if [[ -n "$gemini_key" ]]; then
       gemini_model="$(trim_crlf "$(prompt "Gemini Live model id" "${gemini_model_default}")")"
     fi
+  fi
+
+  llm_choice="$(printf '%s' "$llm_choice" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  if [[ -n "$llm_choice" && "$llm_choice" != "openai" && "$llm_choice" != "anthropic" ]]; then
+    say_warn "Unrecognized LLM_PROVIDER='${llm_choice}' — using inferred default."
+    llm_choice=""
   fi
 
   if [[ -z "$llm_choice" ]]; then

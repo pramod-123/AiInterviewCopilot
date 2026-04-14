@@ -188,7 +188,11 @@ export class GeminiLiveWebSocketPlugin {
   private static handleClientJson(
     session: Session,
     raw: string,
-    log: { info: (o: object, m: string) => void; warn: (o: object, m: string) => void },
+    log: {
+      debug: (o: object, m: string) => void;
+      info: (o: object, m: string) => void;
+      warn: (o: object, m: string) => void;
+    },
     sessionId: string,
   ): void {
     let parsed: GeminiLiveClientMessage;
@@ -204,7 +208,7 @@ export class GeminiLiveWebSocketPlugin {
     }
 
     const recordSend = (snapshot: Record<string, unknown>): void => {
-      log.info({ sessionId, ...snapshot }, "gemini live: realtimeSend");
+      log.debug({ sessionId, ...snapshot }, "gemini live: realtimeSend");
     };
 
     switch (parsed.type) {
@@ -354,7 +358,8 @@ export class GeminiLiveWebSocketPlugin {
             onopen: () => {
               bridgeOpenedAtWallMs ??= Date.now();
               void initGeminiAudioCapture(this.db, paths, sessionId, bridgeOpenedAtWallMs);
-              log.info(
+              log.info({ sessionId, model }, "gemini live: bridge open");
+              log.debug(
                 {
                   sessionId,
                   model,
@@ -364,7 +369,7 @@ export class GeminiLiveWebSocketPlugin {
                     bridgeOpenedAtWallMs,
                   },
                 },
-                "gemini live: onopen",
+                "gemini live: onopen detail",
               );
               GeminiLiveWebSocketPlugin.safeSend(socket, { type: "ready", model });
             },
@@ -379,7 +384,7 @@ export class GeminiLiveWebSocketPlugin {
                 liveResumptionHandle = sr.newHandle;
               }
               const payloads = GeminiLiveWebSocketPlugin.messageToClientPayload(msg);
-              log.info({ sessionId, payload: msg }, "gemini live: onmessage");
+              log.debug({ sessionId, payload: msg }, "gemini live: onmessage");
               for (const p of GeminiLiveWebSocketPlugin.payloadsForClientSocket(payloads)) {
                 GeminiLiveWebSocketPlugin.safeSend(socket, p);
               }
@@ -423,7 +428,12 @@ export class GeminiLiveWebSocketPlugin {
               });
             },
             onclose: (e) => {
+              const ev = e as { code?: number; reason?: string };
               log.info(
+                { sessionId, model, code: ev.code ?? null, reason: ev.reason ?? null },
+                "gemini live: upstream closed",
+              );
+              log.debug(
                 {
                   sessionId,
                   model,
@@ -432,7 +442,7 @@ export class GeminiLiveWebSocketPlugin {
                   browserSocketOpen: socket.readyState === socket.OPEN,
                   reconnectScheduled,
                 },
-                "gemini live: onclose",
+                "gemini live: onclose detail",
               );
               geminiSession = null;
 
@@ -444,7 +454,6 @@ export class GeminiLiveWebSocketPlugin {
               void (async () => {
                 try {
                   const delayMs = 450;
-                  const ev = e as { code?: number; reason?: string };
                   GeminiLiveWebSocketPlugin.safeSend(socket, {
                     type: "reconnecting",
                     delayMs,
