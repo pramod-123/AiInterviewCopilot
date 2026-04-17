@@ -18,7 +18,6 @@ import { assertMandatoryInterviewApiConfig } from "../src/services/mandatoryInte
 import { InterviewEvaluationServiceFactory } from "../src/services/evaluation/InterviewEvaluationServiceFactory.js";
 import { LiveSessionPostProcessor } from "../src/services/LiveSessionPostProcessor.js";
 import { SpeechTranscriptionEvaluationOrchestratorFactory } from "../src/services/SpeechTranscriptionEvaluationOrchestratorFactory.js";
-import { SrtGeneratorFactory } from "../src/services/srt-generator/SrtGeneratorFactory.js";
 
 const sessionId = process.argv[2]?.trim();
 if (!sessionId) {
@@ -58,7 +57,6 @@ const processor = new LiveSessionPostProcessor(
   appFileStore,
   speechAnalysis,
   log,
-  new SrtGeneratorFactory(paths, log).create(),
 );
 await processor.run(sessionId, { allowWhileActive: true });
 log.info({ sessionId }, "reprocess-live-session finished");

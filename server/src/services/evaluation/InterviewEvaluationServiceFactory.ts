@@ -90,7 +90,7 @@ function logCompleteEvaluationInputFromEnv(env: NodeJS.ProcessEnv): boolean {
 /**
  * Builds an {@link InterviewEvaluator}. Set **`EVALUATION_PROVIDER`** to **`llm`** (one-shot {@link InterviewEvaluationService})
  * or **`single-agent`** ({@link SingleAgentInterviewEvaluator}). Set **`LLM_PROVIDER`** to **`openai`** | **`anthropic`** | **`gemini`**
- * with the matching API key (shared with {@link LlmClientFactory} and WhisperX role mapping, not evaluation-specific).
+ * with the matching API key (shared with {@link LlmClientFactory}, not evaluation-specific).
  * Throws if env / API keys / database are not configured — the HTTP server should not start.
  * See `agents/single-agent-evaluator/AGENT.md` for the tool-based evaluator contract.
  *

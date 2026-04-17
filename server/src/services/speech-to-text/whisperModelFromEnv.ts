@@ -1,11 +1,9 @@
 const DEFAULT = "base";
 
 /**
- * Shared Whisper **model id** for:
- * - local `whisper` CLI ({@link LocalWhisperSpeechToTextService}, semantic diarization)
- * - WhisperX Python (`scripts/diarize_dialogue_whisperx.py` reads the same vars from `process.env`)
+ * Shared Whisper **model id** for the local `whisper` CLI ({@link LocalWhisperSpeechToTextService}).
  *
- * Precedence: `WHISPER_MODEL` → `LOCAL_WHISPER_MODEL` → `WHISPERX_MODEL` → `"base"`.
+ * Precedence: `WHISPER_MODEL` → `LOCAL_WHISPER_MODEL` → `WHISPERX_MODEL` (legacy alias) → `"base"`.
  */
 export function whisperModelFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   const m =

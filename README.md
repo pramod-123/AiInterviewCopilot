@@ -69,7 +69,7 @@ Set these in `server/.env` (or via installer prompts) depending on your provider
 
 - `OPENAI_API_KEY` (recommended default): used for remote STT (`whisper-1`) and OpenAI-backed evaluation.
 - `ANTHROPIC_API_KEY` (optional): used when `LLM_PROVIDER=anthropic`.
-- `HF_TOKEN` (optional but recommended for WhisperX diarization): Hugging Face token used by pyannote/WhisperX flows.
+- Live session post-process prefers **`gemini-audio/realtime-transcriptions.jsonl`** when the voice bridge is enabled, and writes **`post-process/transcript.srt`** from that transcript; otherwise it uses local or remote STT on tab/mic audio only (no WhisperX and no LLM speaker-role labeling).
 - `GEMINI_API_KEY` (optional): enables Gemini Live WebSocket interviewer features (default when `LIVE_REALTIME_PROVIDER` is unset or `gemini`). With `LLM_PROVIDER=gemini`, set **`GEMINI_MODEL_ID`** (text/chat for evaluation; distinct from **`GEMINI_LIVE_MODEL`** for voice).
 - `OPENAI_REALTIME_MODEL` (optional): required when `LIVE_REALTIME_PROVIDER=openai` — Realtime model id (e.g. `gpt-4o-realtime-preview-2024-12-17`). Uses the same `OPENAI_API_KEY` as other OpenAI features.
 
@@ -77,7 +77,6 @@ Where to get each key:
 
 - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 - Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
-- Hugging Face: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 - Gemini (Google AI Studio): [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 
 Notes:

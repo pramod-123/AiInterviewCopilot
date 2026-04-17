@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Installer: GitHub Releases (server tarball + Chrome extension), host dependencies
-# (Node 20+, ffmpeg/ffprobe, Python, unzip), Python venvs (WhisperX + local Whisper), Prisma.
+# (Node 20+, ffmpeg/ffprobe, Python, unzip), Python venv (local Whisper), Prisma.
 #
 # One-liner (public GitHub API):
 #   curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh | bash
@@ -181,7 +181,7 @@ install_welcome() {
   printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_DIM}" "Installer · ${VERSION_WIRED}" "${C_ACCENT_B}" "${C_RST}"
   printf '%b╚══════════════════════════════════════════════════════════════╝%b\n' "${C_ACCENT_B}" "${C_RST}"
   say ""
-  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · Python venvs (WhisperX + Whisper) · SQLite & .env"
+  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · Python venv (Whisper) · SQLite & .env"
   say ""
 }
 
@@ -601,7 +601,7 @@ download_asset() {
 # ---------------------------------------------------------------------------
 
 main() {
-  INSTALL_PROGRESS_TOTAL=12
+  INSTALL_PROGRESS_TOTAL=11
   INSTALL_PROGRESS_NUM=0
 
   install_welcome
@@ -708,16 +708,15 @@ main() {
   tick_done "Data directory and DATABASE_URL ready"
   bump_install_progress "Data / .env base"
 
-  banner "API keys (LLM, Gemini Live, Hugging Face)"
-  local openai_key anthropic_key llm_choice hf_token gemini_key gemini_model
+  banner "API keys (LLM, Gemini Live)"
+  local openai_key anthropic_key llm_choice gemini_key gemini_model
   local gemini_model_default="gemini-2.5-flash-native-audio-preview-12-2025"
   if [[ "${AUTO_YES}" == "1" ]]; then
     say_dim "INSTALL_CONSUMER_YES=1: not prompting for secrets — using OPENAI_API_KEY, ANTHROPIC_API_KEY, LLM_PROVIDER,"
-    say_dim "HF_TOKEN / HUGGING_FACE_HUB_TOKEN, GEMINI_API_KEY, GEMINI_LIVE_MODEL from the environment if set."
+    say_dim "GEMINI_API_KEY, GEMINI_LIVE_MODEL from the environment if set."
     openai_key="$(trim_crlf "${OPENAI_API_KEY:-}")"
     anthropic_key="$(trim_crlf "${ANTHROPIC_API_KEY:-}")"
     llm_choice="$(trim_crlf "${LLM_PROVIDER:-}")"
-    hf_token="$(trim_crlf "${HF_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}")"
     gemini_key="$(trim_crlf "${GEMINI_API_KEY:-}")"
     gemini_model="$(trim_crlf "${GEMINI_LIVE_MODEL:-}")"
   else
@@ -743,8 +742,6 @@ main() {
       openai_key="$(trim_crlf "$(read_secret_prompt "OpenAI API key (Enter to skip)")")"
       anthropic_key=""
     fi
-    say_dim "Hugging Face token (hf_…) — WhisperX/pyannote (huggingface.co/settings/tokens)."
-    hf_token="$(trim_crlf "$(read_secret_prompt "Hugging Face token (Enter to skip)")")"
     say_dim "Google Gemini (optional) — Live WebSocket needs GEMINI_API_KEY and GEMINI_LIVE_MODEL."
     gemini_key="$(trim_crlf "$(read_secret_prompt "Gemini API key (Enter to skip)")")"
     gemini_model=""
@@ -776,10 +773,6 @@ main() {
     upsert_env_line "ANTHROPIC_API_KEY" "ANTHROPIC_API_KEY=${anthropic_key}"
   fi
 
-  if [[ -n "$hf_token" ]]; then
-    upsert_env_line "HF_TOKEN" "HF_TOKEN=${hf_token}"
-  fi
-
   if [[ -n "$gemini_key" ]]; then
     upsert_env_line "GEMINI_API_KEY" "GEMINI_API_KEY=${gemini_key}"
     if [[ -z "$gemini_model" ]]; then
@@ -794,9 +787,6 @@ main() {
   if [[ "$llm_choice" == "openai" && -z "$openai_key" ]]; then
     say_note "LLM_PROVIDER=openai but no OpenAI key — add OPENAI_API_KEY in .env for LLM and related OpenAI features."
   fi
-  if [[ -z "$hf_token" ]]; then
-    say_note "No HF_TOKEN — add one in .env before using WhisperX/pyannote diarization."
-  fi
   if [[ -z "$gemini_key" ]]; then
     say_note "Gemini Live is off until GEMINI_API_KEY and GEMINI_LIVE_MODEL are set in .env."
   fi
@@ -809,27 +799,6 @@ main() {
   npx prisma db push
   tick_done "Database schema applied (Prisma)"
   bump_install_progress "Prisma"
-
-  banner "Python: WhisperX (diarization / WhisperX SRT)"
-  local venv_wx="${INSTALL_PREFIX}/venv-whisperx"
-  if [[ "${INSTALL_SKIP_PYTHON_VENVS:-}" == "1" ]]; then
-    say_dim "INSTALL_SKIP_PYTHON_VENVS=1: skipping WhisperX venv."
-    tick_done "WhisperX venv skipped"
-  elif prompt_yn "Create venv and pip install whisperx (large download; needed for DIARIZATION_PROVIDER=whisperx)?" "y"; then
-    require_cmds python3
-    say_dim "Creating ${venv_wx} …"
-    python3 -m venv "${venv_wx}"
-    "${venv_wx}/bin/pip" install -U pip setuptools wheel
-    say_dim "Installing whisperx (pip may show its own progress)…"
-    "${venv_wx}/bin/pip" install "whisperx"
-    upsert_env_line "DIARIZATION_PYTHON" "DIARIZATION_PYTHON=${venv_wx}/bin/python"
-    upsert_env_line "DIARIZATION_PROVIDER" "DIARIZATION_PROVIDER=whisperx"
-    tick_done "WhisperX venv ready (${venv_wx})"
-    say_dim "If you skipped HF_TOKEN earlier, set it in .env for pyannote (see diarize_dialogue_whisperx.py)."
-  else
-    tick_done "WhisperX venv declined"
-  fi
-  bump_install_progress "WhisperX"
 
   banner "Python: local Whisper CLI (offline STT)"
   local venv_whisper="${INSTALL_PREFIX}/venv-whisper"
@@ -1039,7 +1008,7 @@ EOS
   fi
   say_dim "Optional PATH: export PATH=\"${INSTALL_PREFIX}/bin:\${PATH}\""
   say ""
-  say_dim "Tweak ${INSTALL_PREFIX}/.env — EVALUATION_PROVIDER, HF_TOKEN, GEMINI_*, … (STT_PROVIDER stays local.)"
+  say_dim "Tweak ${INSTALL_PREFIX}/.env — EVALUATION_PROVIDER, GEMINI_*, … (STT_PROVIDER stays local.)"
   if [[ "${EXT_INSTALLED}" == true ]] && [[ -f "${EXT_DIR}/manifest.json" ]]; then
     say ""
     say "${C_ACCENT}Chrome:${C_RST} Extensions → Developer mode → Load unpacked → ${C_BOLD}${EXT_DIR}${C_RST}"

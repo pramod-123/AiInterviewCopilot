@@ -14,7 +14,6 @@ import { SpeechTranscriptionEvaluationOrchestratorFactory } from "./services/Spe
 import { SpeechToTextServiceFactory } from "./services/speech-to-text/SpeechToTextServiceFactory.js";
 import { LiveSessionPostProcessor } from "./services/LiveSessionPostProcessor.js";
 import { LiveSessionPostProcessWebSocketPlugin } from "./http/LiveSessionPostProcessWebSocketPlugin.js";
-import { SrtGeneratorFactory } from "./services/srt-generator/SrtGeneratorFactory.js";
 
 /**
  * Composes Fastify plugins and route controllers for the local interview API.
@@ -81,7 +80,6 @@ export class InterviewCopilotServer {
       appFileStore,
       speechAnalysis,
       this.app.log,
-      new SrtGeneratorFactory(this.paths, this.app.log).create(),
     );
     const liveSessionRoutes = new LiveSessionRoutesController(
       appDao,

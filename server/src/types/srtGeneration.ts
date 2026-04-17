@@ -5,7 +5,7 @@ export type SrtLabeledSegment = {
   speakerLabel: string;
 };
 
-export type SrtGenerationProvider = "llm_client" | "whisperx";
+export type SrtGenerationProvider = "none";
 
 export type SrtGenerationResult = {
   provider: SrtGenerationProvider;

@@ -4,7 +4,7 @@ import type { SrtGenerationResult } from "../../../src/types/srtGeneration.js";
 
 function dim(segments: SrtGenerationResult["segments"]): SrtGenerationResult {
   return {
-    provider: "llm_client",
+    provider: "none",
     model: "test",
     language: "en",
     audioSource: "dialogue_mixed",

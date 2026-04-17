@@ -200,7 +200,7 @@ See **[README — HTTP API (summary)](../README.md#http-api-summary)** for the r
 ##### Evaluation / STT factories
 
 - **`SpeechToTextServiceFactory`** — `STT_PROVIDER` = **`remote`** (default, OpenAI Whisper only) or **`local`** (Python whisper CLI); **`none`** is rejected for the HTTP API; optional **`REMOTE_STT_MAX_CHUNK_BYTES`**; remote Whisper uses fixed **`whisper-1`** on **`OpenAiLlmClient`** (not `OPENAI_MODEL_ID`).
-- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = **`llm`** (one-shot) \| **`single-agent`** (tool agent); **`LLM_PROVIDER`** = **`openai`** \| **`anthropic`** (shared with **`LlmClientFactory`**, WhisperX role mapping); **`OPENAI_MODEL_ID`** / **`ANTHROPIC_MODEL_ID`**; builds **`InterviewEvaluationService`** or **`SingleAgentInterviewEvaluator`**.
+- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = **`llm`** (one-shot) \| **`single-agent`** (tool agent); **`LLM_PROVIDER`** = **`openai`** \| **`anthropic`** (shared with **`LlmClientFactory`**); **`OPENAI_MODEL_ID`** / **`ANTHROPIC_MODEL_ID`**; builds **`InterviewEvaluationService`** or **`SingleAgentInterviewEvaluator`**.
 
 ---
 
@@ -236,10 +236,10 @@ Shared concepts: **`ffmpegExtract`**, **`transcriptFormatting`**, **`editorRoiDe
 | `STT_PROVIDER` | **`remote`** (default) or **`local`**; **`none`** rejected for the interview HTTP API |
 | `REMOTE_STT_MAX_CHUNK_BYTES` | Optional; remote STT WAV chunk size cap |
 | `EVALUATION_PROVIDER` | Exactly **`llm`** or **`single-agent`** (evaluator mode) |
-| `LLM_PROVIDER` | Exactly **`openai`** or **`anthropic`** (app-wide chat LLM: eval, `LlmClientFactory`, WhisperX mapping) |
+| `LLM_PROVIDER` | Exactly **`openai`** or **`anthropic`** (app-wide chat LLM: eval, `LlmClientFactory`) |
 | `OPENAI_MODEL_ID` | Chat/eval/vision model on OpenAI (ROI uses the same model); remote Whisper STT uses `whisper-1` in code |
 | `ANTHROPIC_MODEL_ID` | e.g. `claude-opus-4-6` when `LLM_PROVIDER=anthropic` |
-| `WHISPER_MODEL` | Whisper **size** for local CLI + WhisperX (fallback: `LOCAL_WHISPER_MODEL`, `WHISPERX_MODEL`) |
+| `WHISPER_MODEL` | Whisper **size** for local CLI (fallback: `LOCAL_WHISPER_MODEL`, `WHISPERX_MODEL`) |
 | `LOCAL_WHISPER_EXECUTABLE`, `LOCAL_WHISPER_MAX_CHUNK_BYTES` | Only when `STT_PROVIDER=local` |
 | `VIDEO_JOB_FRAME_FPS` | Optional fps cap after **`mpdecimate`** for API jobs (default **2**) |
 | `PORT`, `HOST` | HTTP server |
