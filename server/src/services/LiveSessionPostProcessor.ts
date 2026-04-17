@@ -20,13 +20,13 @@ import { writeE2eSpeechAnalysisArtifacts } from "./e2e/E2eSpeechAnalysisArtifact
 import type { SpeechTranscriptionEvaluationOrchestrator } from "./SpeechTranscriptionEvaluationOrchestrator.js";
 import { codeSnapshotsFromTimelineSec } from "./codeSnapshotsFromTimelineSec.js";
 import { FfmpegRunner, ffprobeFormatDurationSec } from "../media/ffmpegExtract.js";
+import { transcriptionToSrt } from "../media/transcriptFormatting.js";
 import type { SrtGenerationResult } from "../types/srtGeneration.js";
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
 import { SpeechSegment, SpeechTranscription } from "../types/speechTranscription.js";
 import { isWhisperXDiarizationEnabled } from "./diarization/runWhisperXDiarization.js";
 import { speakerLabelForInterval } from "./diarization/speakerLabelForInterval.js";
 import type { ISrtGenerator } from "./srt-generator/ISrtGenerator.js";
-import { speechTranscriptionFromWhisperXSrt } from "./srt-generator/speechTranscriptionFromWhisperXSrt.js";
 import { notifyPostProcessEvent } from "../live-session/postProcessEventsHub.js";
 
 export type LiveSessionPostProcessRunOptions = {
@@ -149,12 +149,10 @@ export class LiveSessionPostProcessor {
               geminiChunkCount: dialogueMerge.chunkCount,
               whisperxHint:
                 transcriptSource === "gemini_live_realtime"
-                  ? "Transcript and speaker labels from Gemini Live input/output transcription; local STT and SRT/diarization were skipped."
-                  : diarization?.provider === "whisperx"
-                    ? "Transcript and speaker labels from WhisperX (same run as pipeline.diarization); Gemini Live realtime transcript skipped when SRT/diarization provider is whisperx."
-                    : diarization
-                      ? `Speaker diarization is in pipeline.diarization (${diarization.provider}).`
-                      : "Set DIARIZATION_PROVIDER=whisperx (HF token) or openai_semantic (local whisper + OpenAI); STT uses tab/mic audio.wav unless WhisperX is the SRT provider.",
+                  ? "Transcript and speaker labels from live voice bridge realtime (input/output transcription in gemini-audio/realtime-transcriptions.jsonl); local STT skipped when this path is used."
+                  : diarization
+                    ? `Speaker diarization is in pipeline.diarization (${diarization.provider}).`
+                    : "When realtime transcript is unavailable, STT uses tab/mic audio.wav; for speaker labels use DIARIZATION_PROVIDER=openai or openai_semantic, or SRT_GENERATOR_PROVIDER=llm_client (not whisperx) if you want non-WhisperX diarization on fallback.",
             }
           : undefined,
         diarization: diarization
@@ -249,12 +247,10 @@ export class LiveSessionPostProcessor {
     try {
       const voiceChunkCount = await this.db.countLiveVoiceRealtimeAudioChunks(sessionId);
       if (voiceChunkCount > 0) {
-        const workDir = path.join(artifactDir, "gemini-stitch-work");
         const gemini16k = path.join(artifactDir, "gemini-interviewer-16k.wav");
         const stitched = await stitchGeminiInterviewerTimelineWav({
           sessionId,
           db: this.db,
-          workDir,
           outWav16k: gemini16k,
         });
         if (stitched) {
@@ -276,8 +272,12 @@ export class LiveSessionPostProcessor {
             anchorDeltaMs: stitched.anchorDeltaMs,
             chunkCount: stitched.chunkCount,
           };
-          this.log.debug(
-            { sessionId, jobId, geminiChunks: stitched.chunkCount },
+          this.log.info(
+            {
+              sessionId,
+              jobId,
+              geminiChunks: stitched.chunkCount,
+            },
             "Gemini interviewer audio stitched, mixed into dialogue.webm, and copied to recording.webm for playback.",
           );
         }
@@ -295,9 +295,7 @@ export class LiveSessionPostProcessor {
     const codeTexts = session.codeSnapshots.map((s) => s.code);
     const forceLocalStt = process.env.LIVE_SESSION_FORCE_WHISPER_STT === "1";
     const liveInterviewerEnabled = session.liveInterviewerEnabled;
-    const useWhisperXPrimary = this.srtGenerator.providerId === "whisperx";
-    const allowGeminiRealtimeTranscript =
-      liveInterviewerEnabled && !forceLocalStt && !useWhisperXPrimary;
+    const allowGeminiRealtimeTranscript = liveInterviewerEnabled && !forceLocalStt;
     const geminiBundle = allowGeminiRealtimeTranscript
       ? await tryLoadGeminiRealtimeForLiveSession(this.paths, this.db, sessionId)
       : null;
@@ -314,31 +312,8 @@ export class LiveSessionPostProcessor {
         transcription = speechTranscriptionFromGeminiUtterances(geminiBundle.utterances);
         this.log.debug(
           { sessionId, jobId, segments: transcription.segments.length },
-          "Live session transcript from Gemini Live realtime (input/output transcription).",
+          "Live session transcript from live realtime (input/output transcription).",
         );
-      } else if (useWhisperXPrimary) {
-        const d = await this.srtGenerator.generate({
-          audioFilePath: wavForDiarize,
-          audioSource: audioSourceForDiarize,
-        });
-        if (d && d.segments.length > 0) {
-          diarization = d;
-          transcription = speechTranscriptionFromWhisperXSrt(d);
-          this.log.debug(
-            {
-              sessionId,
-              jobId,
-              segments: transcription.segments.length,
-              audioSource: d.audioSource,
-            },
-            "Live session transcript from WhisperX (single ASR + diarization pass).",
-          );
-        } else {
-          this.log.warn(
-            { sessionId, jobId },
-            "WhisperX produced no segments; falling back to STT_PROVIDER on tab/mic audio.wav.",
-          );
-        }
       }
 
       if (transcription === undefined) {
@@ -410,6 +385,11 @@ export class LiveSessionPostProcessor {
 
       if (diarization?.srt?.trim()) {
         await this.files.writeFile(path.join(artifactDir, "transcript.srt"), diarization.srt.trim() + "\n", "utf-8");
+      } else if (transcriptSource === "gemini_live_realtime") {
+        const srt = transcriptionToSrt(transcription).trim();
+        if (srt.length > 0) {
+          await this.files.writeFile(path.join(artifactDir, "transcript.srt"), srt + "\n", "utf-8");
+        }
       }
 
       const durationSec = transcription.durationSec ?? (await ffprobeFormatDurationSec(audioWav));

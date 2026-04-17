@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
+import type { Readable } from "node:stream";
 import type { IAppFileStore } from "../dao/file-store/IAppFileStore.js";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -38,6 +40,123 @@ export class FfmpegRunner {
       });
     });
   }
+}
+
+/**
+ * Resamples mono s16le PCM entirely in memory (ffmpeg stdin → stdout). No temp files.
+ */
+export function resampleS16leMonoPcmBuffer(
+  pcm: Buffer,
+  fromSampleRateHz: number,
+  toSampleRateHz: number,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const stderrChunks: Buffer[] = [];
+    const stdoutChunks: Buffer[] = [];
+    const child = spawn(
+      "ffmpeg",
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "s16le",
+        "-ar",
+        String(fromSampleRateHz),
+        "-ac",
+        "1",
+        "-i",
+        "-",
+        "-f",
+        "s16le",
+        "-ar",
+        String(toSampleRateHz),
+        "-ac",
+        "1",
+        "-",
+      ],
+      { stdio: ["pipe", "pipe", "pipe"], shell: false },
+    );
+
+    child.stderr?.on("data", (d) => stderrChunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
+    child.stdout?.on("data", (d) => stdoutChunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
+    child.on("error", (err) => {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    });
+    child.on("close", (code, signal) => {
+      const errText = Buffer.concat(stderrChunks).toString("utf-8").trim();
+      if (code !== 0) {
+        reject(
+          new Error(
+            `ffmpeg resample exited with code ${code}${signal ? ` (${signal})` : ""}${errText ? `: ${errText}` : ""}`,
+          ),
+        );
+        return;
+      }
+      resolve(Buffer.concat(stdoutChunks));
+    });
+
+    child.stdin?.end(pcm);
+  });
+}
+
+/**
+ * Streams mono s16le PCM at 24 kHz into ffmpeg stdin and writes a 16 kHz mono WAV file.
+ * Does not buffer the full PCM in Node before encode (backpressure from ffmpeg applies).
+ */
+export async function pipelinePcmS16leMono24kToWav16kFile(
+  audioReadable: Readable,
+  outWavPath: string,
+): Promise<void> {
+  const stderrChunks: Buffer[] = [];
+  const child = spawn(
+    "ffmpeg",
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-f",
+      "s16le",
+      "-ar",
+      "24000",
+      "-ac",
+      "1",
+      "-i",
+      "-",
+      "-c:a",
+      "pcm_s16le",
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      outWavPath,
+    ],
+    { stdio: ["pipe", "ignore", "pipe"], shell: false },
+  );
+
+  child.stderr?.on("data", (d) => stderrChunks.push(Buffer.isBuffer(d) ? d : Buffer.from(d)));
+
+  const exitPromise = new Promise<void>((resolve, reject) => {
+    child.on("error", (err) => {
+      reject(err instanceof Error ? err : new Error(String(err)));
+    });
+    child.on("close", (code, signal) => {
+      const errText = Buffer.concat(stderrChunks).toString("utf-8").trim();
+      if (code !== 0) {
+        reject(
+          new Error(
+            `ffmpeg pcm→wav exited with code ${code}${signal ? ` (${signal})` : ""}${errText ? `: ${errText}` : ""}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+
+  await pipeline(audioReadable, child.stdin!);
+  await exitPromise;
 }
 
 /** Container / stream duration in seconds (best effort; 0 if unknown). */
