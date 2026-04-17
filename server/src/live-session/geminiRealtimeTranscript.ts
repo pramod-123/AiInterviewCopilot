@@ -14,9 +14,24 @@ export type GeminiDerivedUtterance = {
   speakerLabel: "INTERVIEWEE" | "INTERVIEWER";
 };
 
+/** Seconds after the last utterance ends when no following transcript event exists (no audio duration here). */
+const LAST_UTTERANCE_TAIL_SEC = 1.0;
+
+type FlushedTurn = {
+  role: "input" | "output";
+  text: string;
+  /** Milliseconds since recording start (bridge offset + {@link computeRecordingAnchorDeltaMs}). */
+  anchorMs: number;
+};
+
 /**
  * Maps Gemini Live wall-clock offsets onto the merged recording timeline using the same anchor as
  * {@link stitchGeminiInterviewerTimelineWav}.
+ *
+ * Each finished line uses `Date.now()-bridgeOpen` at append time as one instant on the recording
+ * clock. Segments use **[t_i, t_{i+1}]** (non-overlapping, monotonic) so a candidate line does not
+ * inherit the previous line’s **start** time — that packing caused e.g. first user speech at ~25s
+ * on the recording to appear starting at ~14s when the interviewer’s line ended at ~14s.
  */
 export function mergeGeminiRealtimeRecordsToUtterances(
   records: RealtimeTranscriptionRecord[],
@@ -27,25 +42,15 @@ export function mergeGeminiRealtimeRecordsToUtterances(
     return d !== 0 ? d : a.role.localeCompare(b.role);
   });
 
-  const utterances: GeminiDerivedUtterance[] = [];
-  let lastEndSec = 0;
+  const flushed: FlushedTurn[] = [];
 
   const flush = (role: "input" | "output", text: string, offsetFromBridgeOpenMs: number): void => {
     const t = text.trim();
     if (!t) {
       return;
     }
-    const recMs = Math.max(0, offsetFromBridgeOpenMs + anchorDeltaMs);
-    const endSec = recMs / 1000;
-    const startSec = lastEndSec;
-    const segEnd = Math.max(startSec + 0.05, endSec);
-    const speakerLabel: GeminiDerivedUtterance["speakerLabel"] =
-      role === "input" ? "INTERVIEWEE" : "INTERVIEWER";
-    utterances.push({
-      segment: new SpeechSegment(startSec, segEnd, t),
-      speakerLabel,
-    });
-    lastEndSec = segEnd;
+    const anchorMs = Math.max(0, offsetFromBridgeOpenMs + anchorDeltaMs);
+    flushed.push({ role, text: t, anchorMs });
   };
 
   let pendingIn: { text: string; offset: number } | null = null;
@@ -72,6 +77,26 @@ export function mergeGeminiRealtimeRecordsToUtterances(
   }
   if (pendingOut?.text.trim()) {
     flush("output", pendingOut.text, pendingOut.offset);
+  }
+
+  const utterances: GeminiDerivedUtterance[] = [];
+  let prevEndSec = 0;
+  for (let i = 0; i < flushed.length; i++) {
+    const { role, text, anchorMs } = flushed[i]!;
+    const idealStartSec = anchorMs / 1000;
+    const startSec = Math.max(prevEndSec, idealStartSec);
+    const nextAnchorSec = i + 1 < flushed.length ? flushed[i + 1]!.anchorMs / 1000 : null;
+    const endSec =
+      nextAnchorSec != null
+        ? Math.max(startSec + 0.05, nextAnchorSec)
+        : startSec + LAST_UTTERANCE_TAIL_SEC;
+    prevEndSec = endSec;
+    const speakerLabel: GeminiDerivedUtterance["speakerLabel"] =
+      role === "input" ? "INTERVIEWEE" : "INTERVIEWER";
+    utterances.push({
+      segment: new SpeechSegment(startSec, endSec, text),
+      speakerLabel,
+    });
   }
 
   return utterances;
