@@ -3,9 +3,9 @@ import {
   mergeVoiceRealtimeAudioChunkFileRowsByFile,
   parsePcmSampleRateFromMime,
   pcmS16leMonoDurationMs,
-} from "../../src/live-session/geminiLiveAudioCapture.js";
+} from "../../src/live-session/interviewBridgeCapture.js";
 
-describe("geminiLiveAudioCapture helpers", () => {
+describe("interviewBridgeCapture helpers", () => {
   it("parses sample rate from mime", () => {
     expect(parsePcmSampleRateFromMime("audio/pcm;rate=24000")).toBe(24000);
     expect(parsePcmSampleRateFromMime("audio/L16; rate=16000")).toBe(16000);

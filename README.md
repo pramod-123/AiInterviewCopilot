@@ -170,6 +170,16 @@ The **Node/TypeScript** service under [`server/`](./server/) runs **Fastify** + 
 
 **Data flow (conceptual)**
 
+```mermaid
+flowchart LR
+  ext[Chrome extension]
+  ext -->|POST /api/live-sessions, video-chunk, code-snapshot| api[Fastify API]
+  api -->|POST …/end| merge[Merge / remux to recording.webm]
+  merge --> lsp[LiveSessionPostProcessor]
+  lsp -->|WAV extract, Whisper + rubric, LiveCodeSnapshot timeline| job[(Job + SpeechUtterance + CodeSnapshot EDITOR_SNAPSHOT)]
+  lsp --> artifacts["Artifacts under data/live-sessions per session / post-process/"]
+```
+
 1. **Live LeetCode session** — extension → **`POST /api/live-sessions`** + chunk/snapshot routes → **`POST …/end`** merges/remuxes to **`recording.webm`** → **`LiveSessionPostProcessor`** creates a **`Job`** (`liveSessionId`), extracts **WAV**, runs **Whisper + rubric** with **extension `LiveCodeSnapshot`** rows as the code timeline → persists **`SpeechUtterance`** + **`CodeSnapshot`** (`EDITOR_SNAPSHOT`); artifacts under **`data/live-sessions/<sessionId>/post-process/`**.
 
 **Low-level design** (goals, diagrams, Prisma field notes, env tables) lives in **[`server/DESIGN.md`](./server/DESIGN.md)**. That document may still mention removed classic video/OCR paths until it is fully revised.

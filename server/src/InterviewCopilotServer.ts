@@ -13,7 +13,6 @@ import { InterviewEvaluationServiceFactory } from "./services/evaluation/Intervi
 import { SpeechTranscriptionEvaluationOrchestratorFactory } from "./services/SpeechTranscriptionEvaluationOrchestratorFactory.js";
 import { SpeechToTextServiceFactory } from "./services/speech-to-text/SpeechToTextServiceFactory.js";
 import { LiveSessionPostProcessor } from "./services/LiveSessionPostProcessor.js";
-import { GeminiLiveWebSocketPlugin } from "./http/GeminiLiveWebSocketPlugin.js";
 import { LiveSessionPostProcessWebSocketPlugin } from "./http/LiveSessionPostProcessWebSocketPlugin.js";
 import { SrtGeneratorFactory } from "./services/srt-generator/SrtGeneratorFactory.js";
 
@@ -96,22 +95,6 @@ export class InterviewCopilotServer {
 
     const jobRoutes = new JobRoutesController(appDao);
     jobRoutes.register(this.app);
-  }
-
-  /**
-   * Gemini Live API bridge — WebSocket `/api/live-sessions/:id/realtime`.
-   * Skipped unless both `GEMINI_API_KEY` and `GEMINI_LIVE_MODEL` are set.
-   */
-  async registerGeminiLiveWebSocket(): Promise<void> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    const model = process.env.GEMINI_LIVE_MODEL?.trim();
-    if (!apiKey || !model) {
-      this.app.log.info(
-        "Gemini Live WebSocket not registered — set GEMINI_API_KEY and GEMINI_LIVE_MODEL to enable voice interviewer.",
-      );
-      return;
-    }
-    await new GeminiLiveWebSocketPlugin(appDao, this.paths).register(this.app);
   }
 
   async listen(port: number, host: string): Promise<void> {

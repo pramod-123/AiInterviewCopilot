@@ -3,11 +3,11 @@ import {
   mergeGeminiRealtimeRecordsToUtterances,
   speechTranscriptionFromGeminiUtterances,
 } from "../../src/live-session/geminiRealtimeTranscript.js";
-import type { GeminiRealtimeTranscriptionRecord } from "../../src/live-session/geminiLiveAudioCapture.js";
+import type { RealtimeTranscriptionRecord } from "../../src/live-session/interviewBridgeCapture.js";
 
 describe("mergeGeminiRealtimeRecordsToUtterances", () => {
   it("maps input/output to INTERVIEWEE/INTERVIEWER and aligns to anchor", () => {
-    const records: GeminiRealtimeTranscriptionRecord[] = [
+    const records: RealtimeTranscriptionRecord[] = [
       { role: "input", text: "Hello", finished: true, offsetFromBridgeOpenMs: 5000 },
       { role: "output", text: "Hi there", finished: true, offsetFromBridgeOpenMs: 8000 },
     ];
@@ -26,7 +26,7 @@ describe("mergeGeminiRealtimeRecordsToUtterances", () => {
   });
 
   it("flushes trailing unfinished text once", () => {
-    const records: GeminiRealtimeTranscriptionRecord[] = [
+    const records: RealtimeTranscriptionRecord[] = [
       { role: "input", text: "Only partial", finished: false, offsetFromBridgeOpenMs: 1000 },
     ];
     const u = mergeGeminiRealtimeRecordsToUtterances(records, 0);

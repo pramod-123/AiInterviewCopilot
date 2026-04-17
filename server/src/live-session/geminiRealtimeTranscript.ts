@@ -2,10 +2,10 @@ import type { IAppDao } from "../dao/IAppDao.js";
 import type { AppPaths } from "../infrastructure/AppPaths.js";
 import { SpeechSegment, SpeechTranscription } from "../types/speechTranscription.js";
 import {
-  readGeminiRealtimeTranscriptionRecords,
+  readRealtimeTranscriptionRecords,
   readVoiceRealtimeAudioBridgeMeta,
-  type GeminiRealtimeTranscriptionRecord,
-} from "./geminiLiveAudioCapture.js";
+  type RealtimeTranscriptionRecord,
+} from "./interviewBridgeCapture.js";
 import { computeRecordingAnchorDeltaMs } from "./stitchGeminiInterviewerTimeline.js";
 
 export type GeminiDerivedUtterance = {
@@ -19,7 +19,7 @@ export type GeminiDerivedUtterance = {
  * {@link stitchGeminiInterviewerTimelineWav}.
  */
 export function mergeGeminiRealtimeRecordsToUtterances(
-  records: GeminiRealtimeTranscriptionRecord[],
+  records: RealtimeTranscriptionRecord[],
   anchorDeltaMs: number,
 ): GeminiDerivedUtterance[] {
   const sorted = [...records].sort((a, b) => {
@@ -107,7 +107,7 @@ export async function tryLoadGeminiRealtimeForLiveSession(
   db: IAppDao,
   sessionId: string,
 ): Promise<{ utterances: GeminiDerivedUtterance[]; anchorDeltaMs: number } | null> {
-  const records = await readGeminiRealtimeTranscriptionRecords(paths, sessionId);
+  const records = await readRealtimeTranscriptionRecords(paths, sessionId);
   if (records.length === 0) {
     return null;
   }

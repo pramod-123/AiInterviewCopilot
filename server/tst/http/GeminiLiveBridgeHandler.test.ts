@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { LiveServerMessage } from "@google/genai";
-import { GeminiLiveWebSocketPlugin } from "../../src/http/GeminiLiveWebSocketPlugin.js";
+import { geminiLiveMessageToClientPayload } from "../../src/live-session/realtime/geminiLiveMessageMapper.js";
 
-describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
+describe("geminiLiveMessageToClientPayload", () => {
   it("returns empty array for empty message", () => {
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload({} as LiveServerMessage)).toEqual([]);
+    expect(geminiLiveMessageToClientPayload({} as LiveServerMessage)).toEqual([]);
   });
 
   it("maps toolCall function names", () => {
@@ -13,7 +13,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         functionCalls: [{ name: "foo" }, { name: "bar" }, { name: "" }],
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "toolCall", names: ["foo", "bar"] },
     ]);
   });
@@ -27,7 +27,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         waitingForInput: true,
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "interrupted", value: true },
       { type: "generationComplete", value: true },
       { type: "turnComplete", value: true },
@@ -42,7 +42,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         outputTranscription: { text: "there", finished: false },
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "inputTranscription", text: "hi", finished: true },
       { type: "outputTranscription", text: "there", finished: false },
     ]);
@@ -55,7 +55,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         outputTranscription: { text: "ok" },
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "outputTranscription", text: "ok", finished: false },
     ]);
   });
@@ -72,7 +72,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         },
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "modelAudio", mimeType: "audio/pcm;rate=24000", data: "YmFzZTY0" },
       { type: "modelText", text: "Hello" },
     ]);
@@ -86,31 +86,22 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         },
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "modelThought", text: "Planning…" },
       { type: "modelText", text: "Hi there" },
     ]);
   });
 
-  it("payloadsForClientSocket forwards all payloads including modelThought", () => {
-    const payloads = [
-      { type: "modelThought", text: "secret" },
-      { type: "modelText", text: "hi" },
-      { type: "interrupted", value: true },
-    ] as Record<string, unknown>[];
-    expect(GeminiLiveWebSocketPlugin.payloadsForClientSocket(payloads)).toEqual(payloads);
-  });
-
   it("maps goAway with timeLeft", () => {
     const msg = { goAway: { timeLeft: "30s" } } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "goAway", timeLeft: "30s" },
     ]);
   });
 
   it("maps goAway with null timeLeft when absent", () => {
     const msg = { goAway: {} } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "goAway", timeLeft: null },
     ]);
   });
@@ -123,7 +114,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
         lastConsumedClientMessageIndex: "42",
       },
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       {
         type: "sessionResumptionUpdate",
         resumable: true,
@@ -136,7 +127,7 @@ describe("GeminiLiveWebSocketPlugin.messageToClientPayload", () => {
     const msg = {
       sessionResumptionUpdate: {},
     } as LiveServerMessage;
-    expect(GeminiLiveWebSocketPlugin.messageToClientPayload(msg)).toEqual([
+    expect(geminiLiveMessageToClientPayload(msg)).toEqual([
       { type: "sessionResumptionUpdate", resumable: null },
     ]);
   });

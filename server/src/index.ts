@@ -54,7 +54,6 @@ try {
 
   await server.registerPlugins();
   server.registerRoutes();
-  await server.registerGeminiLiveWebSocket();
   await server.listen(port, host);
 } catch (err) {
   server.instance.log.error({ err }, "Failed to start server");

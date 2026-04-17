@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { WebSocket } from "ws";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { AppTransactionRunner } from "../db.js";
@@ -13,6 +14,7 @@ import {
 } from "../live-session/serveWebmRange.js";
 import type { LiveSessionPostProcessor } from "../services/LiveSessionPostProcessor.js";
 import { notifyPostProcessEvent } from "../live-session/postProcessEventsHub.js";
+import { GeminiLiveBridgeHandler } from "../live-session/realtime/GeminiLiveBridgeHandler.js";
 
 type SessionIdParams = { Params: { id: string } };
 
@@ -81,6 +83,29 @@ export class LiveSessionRoutesController {
     app.delete<SessionIdParams>("/api/live-sessions/:id", (request, reply) =>
       this.handleDeleteSession(request, reply),
     );
+
+    app.get<SessionIdParams>(
+      "/api/live-sessions/:id/realtime",{ websocket: true }, (socket, request) => 
+        this.handleInterviewWebSocket(socket, request),
+    );
+  }
+
+  /**
+   * WebSocket `/api/live-sessions/:id/realtime` (Gemini Live voice interviewer).
+   */
+  private handleInterviewWebSocket(socket: WebSocket, request: FastifyRequest<SessionIdParams>): void {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) {
+      socket.close(1013, "GEMINI_API_KEY not configured");
+      return;
+    }
+    const model = process.env.GEMINI_LIVE_MODEL?.trim();
+    if (!model) {
+      socket.close(1013, "GEMINI_LIVE_MODEL not configured");
+      return;
+    }
+    const handler = new GeminiLiveBridgeHandler(request.params.id, this.db, this.paths, model, request.log, apiKey);
+    void handler.connect(socket);
   }
 
   private async handleListSessions(reply: FastifyReply): Promise<void> {

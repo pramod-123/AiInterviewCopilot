@@ -11,9 +11,6 @@ export type VoiceRealtimeAudioBridgeMeta = {
   bridgeOpenedAtWallMs: number;
 };
 
-/** @deprecated Use {@link VoiceRealtimeAudioBridgeMeta}. */
-export type GeminiAudioMeta = VoiceRealtimeAudioBridgeMeta;
-
 /** One PCM segment for timeline stitch (from DB). */
 export type VoiceRealtimeAudioChunkStitchRow = {
   pcm: Buffer;
@@ -22,9 +19,6 @@ export type VoiceRealtimeAudioChunkStitchRow = {
   receivedAtWallMs: number;
   offsetFromBridgeOpenMs: number;
 };
-
-/** @deprecated Use {@link VoiceRealtimeAudioChunkStitchRow}. */
-export type GeminiAudioChunkRecord = VoiceRealtimeAudioChunkStitchRow;
 
 /** Legacy on-disk `chunks.jsonl` row (per-file PCM). Used only by migration and tests. */
 export type VoiceRealtimeAudioChunkFileRow = {
@@ -35,8 +29,8 @@ export type VoiceRealtimeAudioChunkFileRow = {
   offsetFromBridgeOpenMs: number;
 };
 
-/** One input/output transcription event (still logged under `gemini-audio/`). */
-export type GeminiRealtimeTranscriptionRecord = {
+/** One input/output transcription event (persisted under the realtime audio session directory). */
+export type RealtimeTranscriptionRecord = {
   role: "input" | "output";
   text: string;
   finished: boolean;
@@ -57,7 +51,8 @@ export function pcmS16leMonoDurationMs(numBytes: number, sampleRate: number): nu
   return (samples / sampleRate) * 1000;
 }
 
-export function geminiAudioDir(paths: AppPaths, sessionId: string): string {
+export function realtimeAudioDir(paths: AppPaths, sessionId: string): string {
+  // Keep legacy folder name for backward compatibility with existing session artifacts.
   return path.join(paths.liveSessionDir(sessionId), "gemini-audio");
 }
 
@@ -75,18 +70,18 @@ export async function readVoiceRealtimeAudioBridgeMeta(
 /**
  * Ensures transcript log directory exists and persists the bridge-open anchor on the session (once).
  */
-export async function initGeminiAudioCapture(
+export async function initRealtimeAudioCapture(
   db: IAppDao,
   paths: AppPaths,
   sessionId: string,
   bridgeOpenedAtWallMs: number,
 ): Promise<void> {
-  const dir = geminiAudioDir(paths, sessionId);
+  const dir = realtimeAudioDir(paths, sessionId);
   await fs.mkdir(dir, { recursive: true });
   await db.setVoiceRealtimeBridgeOpenedAtIfUnset(sessionId, bridgeOpenedAtWallMs);
 }
 
-export async function appendGeminiRealtimeTranscription(
+export async function appendRealtimeTranscription(
   paths: AppPaths,
   sessionId: string,
   bridgeOpenedAtWallMs: number,
@@ -98,10 +93,10 @@ export async function appendGeminiRealtimeTranscription(
   if (!trimmed) {
     return;
   }
-  const dir = geminiAudioDir(paths, sessionId);
+  const dir = realtimeAudioDir(paths, sessionId);
   await fs.mkdir(dir, { recursive: true });
   const offsetFromBridgeOpenMs = Math.max(0, Date.now() - bridgeOpenedAtWallMs);
-  const rec: GeminiRealtimeTranscriptionRecord = {
+  const rec: RealtimeTranscriptionRecord = {
     role,
     text: trimmed,
     finished,
@@ -110,25 +105,25 @@ export async function appendGeminiRealtimeTranscription(
   await fs.appendFile(path.join(dir, REALTIME_TRANSCRIPT_LOG), `${JSON.stringify(rec)}\n`, "utf-8");
 }
 
-export async function readGeminiRealtimeTranscriptionRecords(
+export async function readRealtimeTranscriptionRecords(
   paths: AppPaths,
   sessionId: string,
-): Promise<GeminiRealtimeTranscriptionRecord[]> {
-  const dir = geminiAudioDir(paths, sessionId);
+): Promise<RealtimeTranscriptionRecord[]> {
+  const dir = realtimeAudioDir(paths, sessionId);
   let raw: string;
   try {
     raw = await fs.readFile(path.join(dir, REALTIME_TRANSCRIPT_LOG), "utf-8");
   } catch {
     return [];
   }
-  const out: GeminiRealtimeTranscriptionRecord[] = [];
+  const out: RealtimeTranscriptionRecord[] = [];
   for (const line of raw.split("\n")) {
     const t = line.trim();
     if (!t) {
       continue;
     }
     try {
-      const o = JSON.parse(t) as GeminiRealtimeTranscriptionRecord;
+      const o = JSON.parse(t) as RealtimeTranscriptionRecord;
       if (o && (o.role === "input" || o.role === "output") && typeof o.text === "string") {
         out.push({
           role: o.role,
@@ -144,7 +139,7 @@ export async function readGeminiRealtimeTranscriptionRecords(
   return out;
 }
 
-export async function appendGeminiModelAudioChunk(
+export async function appendRealtimeModelAudioChunk(
   db: IAppDao,
   sessionId: string,
   bridgeOpenedAtWallMs: number,

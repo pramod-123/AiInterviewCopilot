@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCandidateEditorSnapshotForGeminiLive } from "../../src/http/GeminiLiveWebSocketPlugin.js";
+import { formatCandidateEditorSnapshotForGeminiLive } from "../../src/live-session/realtime/geminiLiveEditorFormat.js";
 
 describe("formatCandidateEditorSnapshotForGeminiLive", () => {
   it("wraps non-empty code with framing line", () => {

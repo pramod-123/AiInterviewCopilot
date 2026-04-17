@@ -36,14 +36,14 @@ The repo exposes **classic interview job** routes (**submit** + **result**), **l
 
 ##### 3.1 HTTP (public API)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                  JobRoutesController                             │
-│  POST /api/interviews   ·   GET /api/interviews/:id             │
-└─────┬──────────────────────────────────────────────────────────┘
-      │
-      └── video file only ──► VideoJobProcessor ──► E2eInterviewPipeline ──► Prisma
-            (ROI + OCR + STT + eval + derived InterviewAudio WAV)
+```mermaid
+flowchart TB
+  subgraph jobRoutes["JobRoutesController"]
+    routes["POST /api/interviews · GET /api/interviews/:id"]
+  end
+  jobRoutes -->|"video file only (ROI + OCR + STT + eval + InterviewAudio WAV)"| vjp[VideoJobProcessor]
+  vjp --> e2e[E2eInterviewPipeline]
+  e2e --> prisma[(Prisma)]
 ```
 
 - **`POST /api/interviews`**: multipart field **`file`** must be **video** (`video/*`, or `application/octet-stream` with `.mp4`, `.mov`, `.mkv`, `.avi`, `.m4v`, `.webm`). **Audio-only files → `415`**. Jobs process the **entire** uploaded file (no duration query param or env cap).
@@ -53,20 +53,15 @@ Artifacts: **`data/uploads/<id>/pipeline/`**. Same **`E2eInterviewPipeline`** as
 
 ##### 3.1a Live sessions (`LiveSessionRoutesController`)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│              LiveSessionRoutesController                         │
-│  POST/GET /api/live-sessions  ·  PATCH /:id  ·  POST …/end      │
-│  POST …/video-chunk  ·  POST …/code-snapshot                     │
-│  GET …/recording.webm (merged WebM, Range-capable)               │
-└─────┬───────────────────────────────────────────────────────────┘
-      │
-      ├── chunks on disk: data/live-sessions/<sessionId>/video-chunks/
-      ├── code rows: InterviewLiveSession → LiveCodeSnapshot (session DB)
-      ├── end → mergeLiveSessionRecording / remux → recording.webm
-      └── LiveSessionPostProcessor: WAV extract → STT + eval (code timeline
-          from snapshots) → Job + SpeechUtterance + CodeSnapshot(EDITOR_SNAPSHOT)
-          + Result  (no ROI, no frame OCR)
+```mermaid
+flowchart TB
+  subgraph liveCtl["LiveSessionRoutesController"]
+    liveRoutes["POST/GET /api/live-sessions · PATCH /:id · POST …/end · POST …/video-chunk · POST …/code-snapshot · GET …/recording.webm (merged WebM, Range-capable)"]
+  end
+  liveCtl --> chunks["Chunks on disk: data/live-sessions/…/video-chunks/"]
+  liveCtl --> codeRows["Code rows: InterviewLiveSession → LiveCodeSnapshot (session DB)"]
+  liveCtl --> endMerge["POST …/end → mergeLiveSessionRecording / remux → recording.webm"]
+  liveCtl --> postProc["LiveSessionPostProcessor: WAV → STT + eval (snapshots timeline) → Job + SpeechUtterance + CodeSnapshot EDITOR_SNAPSHOT + Result (no ROI, no frame OCR)"]
 ```
 
 - **While `ACTIVE`**, the extension streams **WebM** time slices and periodic **Monaco** code snapshots; **`PATCH`** stores the **LeetCode problem statement** (scraped in the page).
@@ -77,63 +72,17 @@ Artifacts: **`data/uploads/<id>/pipeline/`**. Same **`E2eInterviewPipeline`** as
 
 Triggered by **`pipelineCli.ts`** (`e2e`, `video`, `finish-e2e`, `stt-eval`). Default e2e output is **`data/e2e-pipeline-test/run-<timestamp>/`**. **SQLite is not updated** by the CLI; **API video uploads** run the same **`E2eInterviewPipeline`** class and **do** persist to the DB.
 
-```
-  input video (.mov / .mp4, …)
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  FFmpeg — demux / probe inputs (`FfmpegRunner`, ffmpegExtract.ts) │
-│  • WAV: -vn pcm_s16le -ar 16000 -ac 1 → audio.wav (for Whisper)   │
-│  • Optional: video-only copy (e2e)                                │
-│  • First frame PNG (-frames:v 1) → first-frame.png (ROI input)   │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Vision ROI (e2e only) — editorRoiDetection.ts                   │
-│  First-frame PNG → OpenAI vision → crop rect + problem-statement   │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  FFmpeg — ROI crop encode → video-roi-cropped.mp4 (even WxH)       │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  ffprobe — ffprobeFormatDurationSec(cropped mp4)                  │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Deduped frame extract (`IDedupedFrameExtractor` /               │
-│  `FfmpegDedupedFrameExtractor` → extractDedupedFramesWithTimestamps) │
-│  Input: ROI-cropped MP4 (e2e) or user crop (video smoke)          │
-│  Filter chain: format=gray → mpdecimate → optional fps=… cap      │
-│  Output: PNG sequence + parse FFmpeg stderr `showinfo` for       │
-│          pts_time → per-frame timestampSeconds                     │
-│  Manifest: writeFramesManifest() → frames-manifest.json            │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  OCR (`TesseractRunner` / tesseract CLI)                           │
-│  One PNG at a time → raw text per frame; order aligned to manifest │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  Speech + rubric (shared with API)                               │
-│  SpeechTranscriptionEvaluationOrchestrator on audio.wav          │
-│  → segments, duration, interview-feedback-style JSON on disk     │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  transcriptFormatting.ts                                         │
-│  alignFramesToSpeech() + buildFinalTranscriptJson()              │
-│  → final-transcript.json, e2e-result.json (meta + alignedTimeline)│
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  IN["Input video (.mov / .mp4, …)"]
+  IN --> F1["FFmpeg — demux / probe (FfmpegRunner, ffmpegExtract.ts): WAV 16 kHz mono → audio.wav; optional video-only copy e2e; first frame PNG → first-frame.png"]
+  F1 --> ROI["Vision ROI (e2e only) — editorRoiDetection.ts: first-frame PNG → OpenAI vision → crop rect + problem statement"]
+  ROI --> F2["FFmpeg — ROI crop encode → video-roi-cropped.mp4 (even WxH)"]
+  F2 --> FP["ffprobe — format duration on cropped mp4"]
+  FP --> FE["Deduped frame extract — FfmpegDedupedFrameExtractor / extractDedupedFramesWithTimestamps: gray → mpdecimate → optional fps; showinfo pts_time → frames-manifest.json"]
+  FE --> OCR["OCR — TesseractRunner: one PNG per frame; order aligned to manifest"]
+  OCR --> STT["Speech + rubric — SpeechTranscriptionEvaluationOrchestrator on audio.wav → segments, duration, feedback JSON on disk"]
+  STT --> TF["transcriptFormatting.ts — alignFramesToSpeech + buildFinalTranscriptJson → final-transcript.json, e2e-result.json"]
 ```
 
 **`VideoProcessingPipeline`** (subcommand `video`) is the **FFmpeg-only** slice: extract WAV, first frame, optional fixed crop, then the same **mpdecimate + showinfo + manifest** path via `FfmpegDedupedFrameExtractor` — **no** LLM ROI, **no** Tesseract, **no** STT in that smoke run.
