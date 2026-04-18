@@ -14,6 +14,12 @@ export type LiveRealtimeTranscriptionPayload = {
   finished: boolean;
   /** OpenAI: correlates input deltas with `completed` for the same user audio item (item_id + content_index). */
   itemKey?: string;
+  /**
+   * OpenAI `conversation.item.input_audio_transcription.completed`: when `usage.type === "duration"`,
+   * `usage.seconds` is the billed audio length; the bridge uses it to approximate wall-clock start if
+   * no streaming delta arrived first (avoids anchoring the whole span at completion time).
+   */
+  sourceAudioDurationSec?: number;
 };
 
 export type LiveRealtimeModelAudioPayload = {

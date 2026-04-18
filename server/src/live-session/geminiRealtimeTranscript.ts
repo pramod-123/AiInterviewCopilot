@@ -41,6 +41,12 @@ type TimedSegment = {
   text: string;
   startMs: number;
   endMs: number;
+  /**
+   * True when `startMs`/`endMs` come from persisted wall spans (Gemini flush or OpenAI span write).
+   * These must not be packed with `max(prevEnd, start)` or overlapping user speech is shown after
+   * a long model line ends.
+   */
+  explicitTiming?: boolean;
 };
 
 /**
@@ -74,6 +80,7 @@ export function mergeGeminiRealtimeRecordsToUtterances(
       text: e.text.trim(),
       startMs: Math.max(0, (e.startOffsetFromBridgeOpenMs as number) + anchorDeltaMs),
       endMs: Math.max(0, (e.endOffsetFromBridgeOpenMs as number) + anchorDeltaMs),
+      explicitTiming: true as const,
     }))
     .filter((s) => s.text.length > 0);
 
@@ -137,9 +144,16 @@ export function mergeGeminiRealtimeRecordsToUtterances(
   const utterances: GeminiDerivedUtterance[] = [];
   let prevEndSec = 0;
   for (const seg of combined) {
-    const startSec = Math.max(prevEndSec, seg.startMs / 1000);
-    const endSec = Math.max(startSec + 0.05, seg.endMs / 1000);
-    prevEndSec = endSec;
+    let startSec: number;
+    let endSec: number;
+    if (seg.explicitTiming) {
+      startSec = Math.max(0, seg.startMs / 1000);
+      endSec = Math.max(startSec + 0.05, seg.endMs / 1000);
+    } else {
+      startSec = Math.max(prevEndSec, seg.startMs / 1000);
+      endSec = Math.max(startSec + 0.05, seg.endMs / 1000);
+    }
+    prevEndSec = Math.max(prevEndSec, endSec);
     const speakerLabel: GeminiDerivedUtterance["speakerLabel"] =
       seg.role === "input" ? "INTERVIEWEE" : "INTERVIEWER";
     utterances.push({

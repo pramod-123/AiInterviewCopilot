@@ -23,6 +23,19 @@ function inAudioTsKey(itemId: string, contentIndex: number): string {
   return `${itemId}\0${contentIndex}`;
 }
 
+/** OpenAI Realtime: `usage` on transcription.completed may bill by audio duration (seconds). */
+function inputTranscriptionCompletedDurationSec(ev: Record<string, unknown>): number | undefined {
+  const usage = ev.usage;
+  if (!usage || typeof usage !== "object") {
+    return undefined;
+  }
+  const u = usage as Record<string, unknown>;
+  if (u.type === "duration" && typeof u.seconds === "number" && Number.isFinite(u.seconds) && u.seconds > 0) {
+    return u.seconds;
+  }
+  return undefined;
+}
+
 /**
  * Maps one OpenAI Realtime server JSON event to normalized browser payloads (Gemini-bridge compatible).
  */
@@ -130,11 +143,13 @@ export function openaiRealtimeServerEventToClientPayloads(
         delete state.inputAudioTranscript[inAudioTsKey(itemId, contentIndex)];
       }
       if (typeof transcript === "string" && transcript.length > 0) {
+        const dur = inputTranscriptionCompletedDurationSec(ev);
         out.push({
           type: "inputTranscription",
           text: transcript,
           finished: true,
           ...(typeof itemId === "string" ? { itemKey: inAudioTsKey(itemId, contentIndex) } : {}),
+          ...(dur != null ? { sourceAudioDurationSec: dur } : {}),
         });
       }
       break;

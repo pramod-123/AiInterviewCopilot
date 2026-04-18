@@ -154,6 +154,29 @@ describe("openaiRealtimeServerEventToClientPayloads", () => {
     ]);
   });
 
+  it("maps input_audio_transcription.completed usage.duration to sourceAudioDurationSec", () => {
+    const state = createOpenAIRealtimeMapperState();
+    const payloads = openaiRealtimeServerEventToClientPayloads(
+      {
+        type: "conversation.item.input_audio_transcription.completed",
+        transcript: "hello",
+        item_id: "msg_2",
+        content_index: 0,
+        usage: { type: "duration", seconds: 2.5 },
+      },
+      state,
+    );
+    expect(payloads).toEqual([
+      {
+        type: "inputTranscription",
+        text: "hello",
+        finished: true,
+        itemKey: "msg_2\0" + "0",
+        sourceAudioDurationSec: 2.5,
+      },
+    ]);
+  });
+
   it("maps cancelled turn_detected to interrupted", () => {
     const state = createOpenAIRealtimeMapperState();
     const payloads = openaiRealtimeServerEventToClientPayloads(

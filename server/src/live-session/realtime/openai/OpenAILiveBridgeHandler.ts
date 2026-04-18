@@ -37,6 +37,11 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
   private mapperState: OpenAIRealtimeMapperState = createOpenAIRealtimeMapperState();
   /** First wall time for a non-empty OpenAI ASR delta (input or output); span written on `finished`. */
   private openaiTranscriptionFirstWallMsByKey = new Map<string, number>();
+  /**
+   * `input_audio_buffer.speech_started` / `speech_stopped` share `item_id` with input transcription;
+   * wall times bound user speech better than ASR completion latency.
+   */
+  private inputAudioVadWallByItemId = new Map<string, { start: number; end?: number }>();
   private readonly warnOnce: { warnedInputRate16k?: boolean } = {};
 
   constructor(
@@ -86,6 +91,7 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
       }
       this.mapperState = createOpenAIRealtimeMapperState();
       this.openaiTranscriptionFirstWallMsByKey.clear();
+      this.inputAudioVadWallByItemId.clear();
 
       const url = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(this.model)}`;
       let ws: WebSocket;
@@ -132,6 +138,20 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
           this.notifyUpstreamOpened(bridgeOpenedAtWallMs);
         }
 
+        if (t === "input_audio_buffer.speech_started" && typeof ev.item_id === "string") {
+          this.inputAudioVadWallByItemId.set(ev.item_id, { start: Date.now() });
+        }
+        if (t === "input_audio_buffer.speech_stopped" && typeof ev.item_id === "string") {
+          const itemId = ev.item_id;
+          const tick = Date.now();
+          const prev = this.inputAudioVadWallByItemId.get(itemId);
+          if (prev) {
+            this.inputAudioVadWallByItemId.set(itemId, { start: prev.start, end: tick });
+          } else {
+            this.inputAudioVadWallByItemId.set(itemId, { start: tick, end: tick });
+          }
+        }
+
         const payloads = openaiRealtimeServerEventToClientPayloads(ev, this.mapperState);
         if (payloads.length > 0) {
           this.processModelOutputs(new LiveRealtimeModelOutputBatch(payloads, ev, bridgeOpenedAtWallMs));
@@ -164,6 +184,14 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
       return false;
     }
     return true;
+  }
+
+  private static itemIdFromOpenAiTranscriptionKey(key: string): string | null {
+    if (key === "__input__" || key === "__output__") {
+      return null;
+    }
+    const z = key.indexOf("\0");
+    return z >= 0 ? key.slice(0, z) : key;
   }
 
   private buildSessionUpdateEvent(instructions: string): Record<string, unknown> {
@@ -203,16 +231,16 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
       (p): p is LiveRealtimeTranscriptionPayload =>
         p.type === "inputTranscription" || p.type === "outputTranscription",
     );
-    const now = Date.now();
     for (const p of rows) {
       const role = p.type === "inputTranscription" ? "input" : "output";
       const key = p.itemKey ?? (role === "input" ? "__input__" : "__output__");
       if (!p.finished) {
+        const tick = Date.now();
         if (!p.text.trim()) {
           continue;
         }
         if (!this.openaiTranscriptionFirstWallMsByKey.has(key)) {
-          this.openaiTranscriptionFirstWallMsByKey.set(key, now);
+          this.openaiTranscriptionFirstWallMsByKey.set(key, tick);
         }
         continue;
       }
@@ -220,15 +248,42 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
         this.openaiTranscriptionFirstWallMsByKey.delete(key);
         continue;
       }
-      const startWall = this.openaiTranscriptionFirstWallMsByKey.get(key) ?? now;
+      const deltaFirstWall = this.openaiTranscriptionFirstWallMsByKey.get(key) ?? null;
       this.openaiTranscriptionFirstWallMsByKey.delete(key);
-      await this.persistRealtimeTranscriptionSpan(
-        bridgeOpenedAtWallMs,
-        role,
-        p.text,
-        startWall,
-        now,
-      );
+
+      const itemId = role === "input" ? OpenAILiveBridgeHandler.itemIdFromOpenAiTranscriptionKey(key) : null;
+      const vad = itemId ? this.inputAudioVadWallByItemId.get(itemId) : undefined;
+
+      let startWall: number;
+      let endWall: number;
+      if (role === "input" && vad?.start != null) {
+        const vadEnd = vad.end != null && vad.end > vad.start ? vad.end : Date.now();
+        startWall = deltaFirstWall != null ? Math.min(vad.start, deltaFirstWall) : vad.start;
+        endWall = Math.max(vadEnd, startWall + 1);
+        if (itemId) {
+          this.inputAudioVadWallByItemId.delete(itemId);
+        }
+      } else {
+        endWall = Date.now();
+        if (deltaFirstWall != null) {
+          startWall = deltaFirstWall;
+        } else {
+          const sec =
+            role === "input" && typeof p.sourceAudioDurationSec === "number" && p.sourceAudioDurationSec > 0
+              ? p.sourceAudioDurationSec
+              : 0;
+          if (sec > 0) {
+            startWall = Math.round(endWall - sec * 1000);
+          } else {
+            startWall = endWall;
+          }
+        }
+        if (itemId) {
+          this.inputAudioVadWallByItemId.delete(itemId);
+        }
+      }
+      startWall = Math.max(bridgeOpenedAtWallMs, Math.min(startWall, endWall));
+      await this.persistRealtimeTranscriptionSpan(bridgeOpenedAtWallMs, role, p.text, startWall, endWall);
     }
   }
 
