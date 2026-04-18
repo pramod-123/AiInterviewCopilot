@@ -12,15 +12,13 @@
     "<label>API base URL " +
     '<input type="url" data-ic="apiBase" placeholder="http://127.0.0.1:3001" autocomplete="off" />' +
     "</label>" +
-    '<button type="button" class="sess-btn sess-btn-primary" data-ic="btnLoad">Reload</button>' +
-    '<button type="button" class="sess-btn sess-btn-primary" data-ic="btnSave">Save</button>' +
     "</div>";
 
-  var TOOLBAR_ACTIONS =
-    '<div class="ic-srv-toolbar ac-toolbar ic-srv-toolbar--actions">' +
-    '<button type="button" class="sess-btn sess-btn-primary" data-ic="btnLoad">Reload</button>' +
+  var MOUNT_SCROLL_OPEN = '<div class="ic-srv-mount-inner"><div class="ic-srv-mount-scroll">';
+  var MOUNT_SCROLL_CLOSE =
+    '</div><div class="ic-srv-save-footer">' +
     '<button type="button" class="sess-btn sess-btn-primary" data-ic="btnSave">Save</button>' +
-    "</div>";
+    "</div></div>";
 
   var INNER_MAIN =
     '<main class="ac-main">' +
@@ -130,7 +128,7 @@
    * @property {HTMLElement} mountPoint
    * @property {boolean} [compact]
    * @property {string} [initialApiBase] applied on first mount only (standalone page)
-   * @property {"full" | "actions"} [toolbar] default full; `actions` = Reload/Save only (use with getApiBase)
+   * @property {"full" | "actions"} [toolbar] default full; `actions` = no top toolbar (API base from parent; Save in footer)
    * @property {() => string} [getApiBase]
    * @property {(normalized: string) => void} [setApiBase]
    * @property {(normalized: string) => void | Promise<void>} [persistApiBase]
@@ -160,8 +158,8 @@
     }
 
     if (mountPoint.dataset.icSrvMounted !== "1") {
-      var bar = opts.toolbar === "actions" ? TOOLBAR_ACTIONS : TOOLBAR_FULL;
-      mountPoint.innerHTML = bar + STATUS_HTML + INNER_MAIN;
+      var bar = opts.toolbar === "actions" ? "" : TOOLBAR_FULL;
+      mountPoint.innerHTML = MOUNT_SCROLL_OPEN + bar + STATUS_HTML + INNER_MAIN + MOUNT_SCROLL_CLOSE;
       if (opts.compact) {
         mountPoint.classList.add("ic-server-config--compact");
       }
@@ -174,7 +172,6 @@
 
     var apiInput = /** @type {HTMLInputElement | null} */ (q(mountPoint, "apiBase"));
     var cfgStatus = /** @type {HTMLElement | null} */ (q(mountPoint, "status"));
-    var btnLoad = /** @type {HTMLButtonElement | null} */ (q(mountPoint, "btnLoad"));
     var btnSave = /** @type {HTMLButtonElement | null} */ (q(mountPoint, "btnSave"));
 
     var liveRealtimeProvider = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "liveRealtimeProvider"));
@@ -608,7 +605,7 @@
           setStatus(err2, true);
           return;
         }
-        setStatus("Saved. Reloading…", false);
+        setStatus("Saved. Refreshing…", false);
         await loadConfig();
       } catch (e) {
         var msg =
@@ -627,10 +624,6 @@
           void persistIfNeeded();
         });
       }
-      btnLoad &&
-        btnLoad.addEventListener("click", function () {
-          void loadConfig();
-        });
       btnSave &&
         btnSave.addEventListener("click", function () {
           void saveConfig();
@@ -666,7 +659,7 @@
     if (!opts.skipInitialLoad) {
       void loadConfig();
     } else if (!lastLoaded) {
-      setStatus('Click "Reload" to fetch server config.', false);
+      setStatus("Open server settings again to fetch config.", false);
     }
 
     var ctl = {

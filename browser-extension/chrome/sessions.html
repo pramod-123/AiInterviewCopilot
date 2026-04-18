@@ -60,16 +60,6 @@
         API base URL
         <input id="apiBase" type="url" placeholder="http://127.0.0.1:3001" autocomplete="off" />
       </label>
-      <button type="button" class="sess-btn sess-btn-primary" id="btnLoad">Load sessions</button>
-      <button type="button" class="sess-btn sess-btn-ghost" id="btnOpenPopup">New interview</button>
-      <button
-        type="button"
-        class="sess-btn sess-btn-ghost"
-        id="linkAppConfig"
-        title="API keys and models on the server (overrides .env)"
-      >
-        Server config
-      </button>
     </div>
     <p id="listStatus"></p>
 
@@ -136,16 +126,6 @@
                 <div id="sessTokenMetaHost" class="sess-token-meta-host" aria-live="polite"></div>
                 <p id="detailSub">—</p>
               </div>
-              <div class="sess-detail-actions">
-                <button type="button" class="sess-action-btn" id="btnShare" title="Copy recording URL">
-                  <span class="material-icons-round" aria-hidden="true">share</span>
-                  Share report
-                </button>
-                <button type="button" class="sess-action-btn sess-action-btn-primary" id="btnExportPrint">
-                  <span class="material-icons-round" aria-hidden="true">download</span>
-                  Print / Save PDF
-                </button>
-              </div>
             </div>
 
             <div class="sess-grid">
@@ -194,22 +174,25 @@
       </main>
     </div>
 
-    <div id="sessSettingsBackdrop" class="sess-settings-backdrop hidden" aria-hidden="true"></div>
+    <div id="sessSettingsBackdrop" class="ic-srv-settings-backdrop hidden" aria-hidden="true"></div>
     <aside
       id="sessSettingsDrawer"
-      class="sess-settings-drawer hidden"
+      class="ic-srv-settings-shell ic-srv-settings-shell--drawer hidden"
       aria-label="Server settings"
       aria-hidden="true"
     >
-      <div class="sess-settings-drawer-head">
-        <h2 class="sess-settings-drawer-title">Server config</h2>
-        <div class="sess-settings-drawer-head-actions">
-          <a
-            href="app-config.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="sess-btn sess-btn-ghost sess-settings-open-tab"
-            >Open in tab</a>
+      <div class="ic-srv-settings-shell-head">
+        <h2 class="ic-srv-settings-shell-title">Server config</h2>
+        <div class="ic-srv-settings-shell-actions">
+          <button
+            type="button"
+            class="sess-theme-btn"
+            id="btnSessSettingsReload"
+            title="Reload server config"
+            aria-label="Reload server config"
+          >
+            <span class="material-icons-round" aria-hidden="true">refresh</span>
+          </button>
           <button
             type="button"
             class="sess-theme-btn"
@@ -221,7 +204,7 @@
           </button>
         </div>
       </div>
-      <div id="sessServerConfigRoot" class="sess-settings-drawer-body custom-scrollbar"></div>
+      <div id="sessServerConfigRoot" class="ic-srv-settings-shell-body custom-scrollbar"></div>
     </aside>
 
     <footer class="sess-footer">

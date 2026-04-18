@@ -44,7 +44,7 @@
             id="btnSideSettings"
             title="Settings"
             aria-expanded="false"
-            aria-controls="sideSettingsPanel"
+            aria-controls="spServerSettingsScreen"
           >
             <span class="material-symbols-outlined" aria-hidden="true">settings</span>
           </button>
@@ -61,7 +61,8 @@
         </div>
       </header>
 
-      <main class="sp-main">
+      <div class="sp-stack-body">
+      <main class="sp-main" id="spRecorderMain">
         <div class="sp-scroll-body">
           <div class="sp-session-stack">
             <p id="meta" class="sp-meta-line"></p>
@@ -77,7 +78,7 @@
               <h1 id="sessionClock">00:00</h1>
             </div>
 
-            <div id="sideSettingsPanel" class="sp-panel-toggle hidden" role="region" aria-label="Settings">
+            <div class="sp-recorder-options" role="group" aria-label="Recording options">
               <label class="mic-setting">
                 <input type="checkbox" id="chkMic" checked />
                 <span
@@ -92,14 +93,6 @@
                   <code>GEMINI_API_KEY</code> + <code>GEMINI_LIVE_MODEL</code>).</span
                 >
               </label>
-              <div class="sp-settings-divider" role="presentation"></div>
-              <h3 class="sp-server-config-heading">Server config</h3>
-              <p class="sp-server-config-lead">
-                API base URL, voice bridge, API keys, Whisper model, and evaluation models (same as Sessions → Server
-                config). STT is always local Whisper; model can also be set in server <code>.env</code> as
-                <code>WHISPER_MODEL</code>.
-              </p>
-              <div id="spServerConfigRoot" class="sp-server-config-mount"></div>
             </div>
 
             <div id="sideHelpPanel" class="sp-panel-toggle hidden" role="region" aria-label="Help">
@@ -183,6 +176,44 @@
           <button type="button" id="btnEnd" disabled>End session on server</button>
         </footer>
       </main>
+
+      <div
+        id="spServerSettingsScreen"
+        class="ic-srv-settings-shell ic-srv-settings-shell--panel hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="spServerSettingsTitle"
+        aria-hidden="true"
+      >
+        <div class="ic-srv-settings-shell-head">
+          <h2 id="spServerSettingsTitle" class="ic-srv-settings-shell-title">Server config</h2>
+          <div class="ic-srv-settings-shell-actions">
+            <button
+              type="button"
+              class="sp-icon-btn"
+              id="btnSpSettingsReload"
+              title="Reload server config"
+              aria-label="Reload server config"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+            </button>
+            <button
+              type="button"
+              class="sp-icon-btn"
+              id="btnSpSettingsClose"
+              title="Close"
+              aria-label="Close server settings"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+          </div>
+        </div>
+        <div
+          id="spServerConfigRoot"
+          class="ic-srv-settings-shell-body sp-server-config-mount custom-scrollbar"
+        ></div>
+      </div>
+      </div>
     </div>
 
     <script src="vendor/prism/prism-bundle.min.js" data-manual></script>

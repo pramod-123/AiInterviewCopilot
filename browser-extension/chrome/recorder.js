@@ -18,7 +18,10 @@ const analysisPulseEl = document.getElementById("analysisPulse");
 const btnSideSettings = document.getElementById("btnSideSettings");
 const btnSideHelp = document.getElementById("btnSideHelp");
 const btnSideTheme = document.getElementById("btnSideTheme");
-const sideSettingsPanel = document.getElementById("sideSettingsPanel");
+const spRecorderMain = document.getElementById("spRecorderMain");
+const spServerSettingsScreen = document.getElementById("spServerSettingsScreen");
+const btnSpSettingsReload = document.getElementById("btnSpSettingsReload");
+const btnSpSettingsClose = document.getElementById("btnSpSettingsClose");
 const sideHelpPanel = document.getElementById("sideHelpPanel");
 
 /** @type {{ reload: () => Promise<void>; syncFromParent: () => void } | null} */
@@ -254,6 +257,26 @@ function setPanelOpen(panel, btn, open) {
   }
   if (btn) {
     btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+}
+
+/**
+ * Full-screen server config (same shell + ICMountServerConfigUI as Sessions).
+ * @param {boolean} open
+ */
+function setSpServerSettingsOpen(open) {
+  if (!spServerSettingsScreen || !spRecorderMain) {
+    return;
+  }
+  spServerSettingsScreen.classList.toggle("hidden", !open);
+  spServerSettingsScreen.setAttribute("aria-hidden", open ? "false" : "true");
+  spRecorderMain.classList.toggle("hidden", open);
+  spRecorderMain.setAttribute("aria-hidden", open ? "true" : "false");
+  document.body.classList.toggle("ic-srv-settings-document-lock", open);
+  btnSideSettings?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open && spServerConfigCtl) {
+    spServerConfigCtl.syncFromParent();
+    void spServerConfigCtl.reload();
   }
 }
 
@@ -1191,6 +1214,7 @@ function mountSpServerConfigOnce() {
   spServerConfigCtl = window.ICMountServerConfigUI({
     mountPoint: root,
     compact: true,
+    toolbar: "full",
     getApiBase: () => (apiBase.trim() ? apiBase.trim().replace(/\/$/, "") : defApi),
     setApiBase: (normalized) => {
       apiBase = normalized;
@@ -1321,28 +1345,37 @@ async function init() {
     });
   }
 
-  if (btnSideSettings && sideSettingsPanel) {
+  if (btnSideSettings && spServerSettingsScreen) {
     btnSideSettings.addEventListener("click", () => {
-      const willOpen = sideSettingsPanel.classList.contains("hidden");
+      const willOpen = spServerSettingsScreen.classList.contains("hidden");
       if (sideHelpPanel && btnSideHelp) {
         setPanelOpen(sideHelpPanel, btnSideHelp, false);
       }
-      setPanelOpen(sideSettingsPanel, btnSideSettings, willOpen);
-      if (willOpen && spServerConfigCtl) {
-        spServerConfigCtl.syncFromParent();
-        void spServerConfigCtl.reload();
-      }
+      setSpServerSettingsOpen(willOpen);
     });
   }
+  btnSpSettingsReload?.addEventListener("click", () => {
+    void spServerConfigCtl?.reload();
+  });
+  btnSpSettingsClose?.addEventListener("click", () => {
+    setSpServerSettingsOpen(false);
+  });
   if (btnSideHelp && sideHelpPanel) {
     btnSideHelp.addEventListener("click", () => {
       const willOpen = sideHelpPanel.classList.contains("hidden");
-      if (sideSettingsPanel && btnSideSettings) {
-        setPanelOpen(sideSettingsPanel, btnSideSettings, false);
-      }
+      setSpServerSettingsOpen(false);
       setPanelOpen(sideHelpPanel, btnSideHelp, willOpen);
     });
   }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") {
+      return;
+    }
+    if (spServerSettingsScreen && !spServerSettingsScreen.classList.contains("hidden")) {
+      setSpServerSettingsOpen(false);
+    }
+  });
 
   syncCaptureUi();
 

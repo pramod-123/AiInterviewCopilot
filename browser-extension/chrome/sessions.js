@@ -1,10 +1,6 @@
 const DEFAULT_API = "http://127.0.0.1:3001";
 
 const apiBaseInput = document.getElementById("apiBase");
-const btnLoad = document.getElementById("btnLoad");
-const btnOpenPopup = document.getElementById("btnOpenPopup");
-const btnShare = document.getElementById("btnShare");
-const btnExportPrint = document.getElementById("btnExportPrint");
 const sessSidebarBulk = document.getElementById("sessSidebarBulk");
 const btnBulkDeleteSessions = document.getElementById("btnBulkDeleteSessions");
 const bulkDeleteLabel = document.getElementById("bulkDeleteLabel");
@@ -1393,7 +1389,7 @@ function selectSessionFromQueryIfPresent() {
   const btn = sessionList.querySelector(`button.sess-session-item[data-session-id="${escaped}"]`);
   if (!(btn instanceof HTMLButtonElement)) {
     setListStatus(
-      `Session ${truncate(want, 14)}… not in this list — click Load sessions to refresh.`,
+      `Session ${truncate(want, 14)}… not in this list — check API base or open Sessions again after new runs.`,
       true,
     );
     return;
@@ -1674,32 +1670,6 @@ btnSidebarToggle?.addEventListener("click", () => {
   void chrome.storage.local.set({ sessionsSidebarCollapsed: collapsed });
 });
 
-btnLoad?.addEventListener("click", () => {
-  void fetchSessions();
-});
-
-btnOpenPopup?.addEventListener("click", () => {
-  void chrome.tabs.create({ url: chrome.runtime.getURL("popup.html") });
-});
-
-btnShare?.addEventListener("click", async () => {
-  if (!selectedSessionId) {
-    return;
-  }
-  const url = recordingUrlForSession(selectedSessionId);
-  try {
-    await navigator.clipboard.writeText(url);
-    setListStatus("Recording URL copied to clipboard.", false);
-    setTimeout(() => setListStatus("", false), 2500);
-  } catch {
-    setListStatus("Could not copy URL.", true);
-  }
-});
-
-btnExportPrint?.addEventListener("click", () => {
-  window.print();
-});
-
 sessionList?.addEventListener("change", (e) => {
   const t = e.target;
   if (t instanceof HTMLInputElement && t.classList.contains("sess-session-select-cb")) {
@@ -1828,9 +1798,9 @@ if (detailWorkspace && !detailWorkspace.dataset.seekDelegationBound) {
 const sessSettingsBackdrop = document.getElementById("sessSettingsBackdrop");
 const sessSettingsDrawer = document.getElementById("sessSettingsDrawer");
 const btnSessSettings = document.getElementById("btnSessSettings");
+const btnSessSettingsReload = document.getElementById("btnSessSettingsReload");
 const btnSessSettingsClose = document.getElementById("btnSessSettingsClose");
 const sessServerConfigRoot = document.getElementById("sessServerConfigRoot");
-const linkAppConfig = document.getElementById("linkAppConfig");
 
 /** @type {{ reload: () => Promise<void>; syncFromParent: () => void } | null} */
 let sessServerConfigCtl = null;
@@ -1843,7 +1813,7 @@ function setSessSettingsDrawerOpen(open) {
   sessSettingsDrawer.classList.toggle("hidden", !open);
   sessSettingsBackdrop.setAttribute("aria-hidden", open ? "false" : "true");
   sessSettingsDrawer.setAttribute("aria-hidden", open ? "false" : "true");
-  document.body.classList.toggle("sess-settings-open", open);
+  document.body.classList.toggle("ic-srv-settings-document-lock", open);
   btnSessSettings?.setAttribute("aria-expanded", open ? "true" : "false");
 }
 
@@ -1882,8 +1852,8 @@ btnSessSettings?.addEventListener("click", () => {
   }
 });
 
-linkAppConfig?.addEventListener("click", () => {
-  openSessSettingsDrawer();
+btnSessSettingsReload?.addEventListener("click", () => {
+  void sessServerConfigCtl?.reload();
 });
 
 btnSessSettingsClose?.addEventListener("click", () => {

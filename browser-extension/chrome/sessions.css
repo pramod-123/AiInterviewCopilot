@@ -2565,77 +2565,6 @@ html[data-theme="dark"] .sess-action-btn-danger:hover {
   }
 }
 
-/* Server settings — slide-over panel */
-.sess-settings-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-}
-
-.sess-settings-backdrop.hidden {
-  display: none;
-}
-
-.sess-settings-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  z-index: 1210;
-  width: min(440px, 100vw);
-  height: 100%;
-  max-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-elevated, #1c1b22);
-  border-left: 1px solid var(--outline-variant, rgba(255, 255, 255, 0.08));
-  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.35);
-}
-
-.sess-settings-drawer.hidden {
-  display: none;
-}
-
-.sess-settings-drawer-head {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--outline-variant, rgba(255, 255, 255, 0.08));
-}
-
-.sess-settings-drawer-title {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-
-.sess-settings-drawer-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sess-settings-open-tab {
-  font-size: 0.78rem;
-  padding: 6px 10px;
-  white-space: nowrap;
-}
-
-.sess-settings-drawer-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 24px;
-}
-
-body.sess-settings-open {
-  overflow: hidden;
-}
-
 @media print {
   body {
     height: auto !important;
@@ -2645,8 +2574,8 @@ body.sess-settings-open {
   .sess-toolbar,
   .sess-sidebar,
   .sess-footer,
-  .sess-settings-backdrop,
-  .sess-settings-drawer {
+  #sessSettingsBackdrop,
+  #sessSettingsDrawer {
     display: none !important;
   }
   .sess-shell {
