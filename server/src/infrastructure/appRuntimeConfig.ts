@@ -2,6 +2,17 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import type { AppPaths } from "./AppPaths.js";
 
+/**
+ * Preset option lists when `app-runtime-config.json` omits an array live in
+ * {@link AppPaths.runtimeAppConfigDefaultsPath} (`data/app-runtime-config.defaults.json`).
+ */
+
+const EVAL_MODEL_OPTION_ID_RE = /^[a-zA-Z0-9._\-:]+$/;
+const EVAL_MODEL_OPTION_MAX = 10;
+const EVAL_MODEL_OPTION_ITEM_MAX_LEN = 128;
+
+const WHISPER_MODEL_ID_RE = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
+
 /** On-disk shape under {@link AppPaths.runtimeAppConfigPath}. */
 export type AppRuntimeConfigV1 = {
   version: 1;
@@ -12,10 +23,26 @@ export type AppRuntimeConfigV1 = {
   openaiRealtimeModel?: string;
   openaiRealtimeVoice?: string;
   geminiLiveModel?: string;
+  /** Gemini Live prebuilt voice name (`speechConfig`); merged as `GEMINI_LIVE_VOICE` when set. */
+  geminiLiveVoice?: string;
   llmProvider?: string;
   openaiModelId?: string;
   anthropicModelId?: string;
   geminiModelId?: string;
+  /** Preset evaluation LLM ids for OpenAI (shown in UI datalist); max {@link EVAL_MODEL_OPTION_MAX} entries. */
+  openaiEvalModelOptions?: string[];
+  anthropicEvalModelOptions?: string[];
+  geminiEvalModelOptions?: string[];
+  /** Preset OpenAI Realtime model ids (voice bridge UI datalist). */
+  openaiRealtimeModelOptions?: string[];
+  /** Preset OpenAI Realtime voice names (voice bridge UI datalist). */
+  openaiRealtimeVoiceOptions?: string[];
+  /** Preset Gemini Live model ids (voice bridge UI datalist). */
+  geminiLiveModelOptions?: string[];
+  /** Preset Gemini Live voice names (voice bridge UI). */
+  geminiLiveVoiceOptions?: string[];
+  /** Preset Whisper checkpoint ids for the Server config UI; merged list only (actual choice is `whisperModel`). */
+  whisperModelOptions?: string[];
   /** Local Whisper CLI checkpoint id; merged as `WHISPER_MODEL` when set. */
   whisperModel?: string;
 };
@@ -27,17 +54,26 @@ export type AppRuntimeConfigPublicV1 = {
   openaiRealtimeModel: string;
   openaiRealtimeVoice: string;
   geminiLiveModel: string;
+  geminiLiveVoice: string;
   llmProvider: string;
   openaiModelId: string;
   anthropicModelId: string;
   geminiModelId: string;
+  openaiEvalModelOptions: string[];
+  anthropicEvalModelOptions: string[];
+  geminiEvalModelOptions: string[];
+  openaiRealtimeModelOptions: string[];
+  openaiRealtimeVoiceOptions: string[];
+  geminiLiveModelOptions: string[];
+  geminiLiveVoiceOptions: string[];
+  whisperModelOptions: string[];
   openaiApiKeyConfigured: boolean;
   geminiApiKeyConfigured: boolean;
   anthropicApiKeyConfigured: boolean;
   whisperModel: string;
 };
 
-const PATCH_KEYS = new Set([
+const STRING_PATCH_KEYS = new Set([
   "liveRealtimeProvider",
   "openaiApiKey",
   "geminiApiKey",
@@ -45,6 +81,7 @@ const PATCH_KEYS = new Set([
   "openaiRealtimeModel",
   "openaiRealtimeVoice",
   "geminiLiveModel",
+  "geminiLiveVoice",
   "llmProvider",
   "openaiModelId",
   "anthropicModelId",
@@ -52,10 +89,31 @@ const PATCH_KEYS = new Set([
   "whisperModel",
 ]);
 
+const ARRAY_PATCH_KEYS = new Set([
+  "openaiEvalModelOptions",
+  "anthropicEvalModelOptions",
+  "geminiEvalModelOptions",
+  "openaiRealtimeModelOptions",
+  "openaiRealtimeVoiceOptions",
+  "geminiLiveModelOptions",
+  "geminiLiveVoiceOptions",
+  "whisperModelOptions",
+]);
+
+const PATCH_KEYS = new Set([...STRING_PATCH_KEYS, ...ARRAY_PATCH_KEYS]);
+
 let mergedEnvCache: { mtimeMs: number; env: NodeJS.ProcessEnv } | null = null;
+
+type RuntimeDefaultsBundle = {
+  defaults: AppRuntimeConfigV1;
+  whisperAllowlist: string[];
+};
+
+let defaultsBundleCache: { mtimeMs: number; bundle: RuntimeDefaultsBundle } | null = null;
 
 export function invalidateRuntimeAppConfigEnvCache(): void {
   mergedEnvCache = null;
+  defaultsBundleCache = null;
 }
 
 export function readRuntimeAppConfigSync(paths: AppPaths): AppRuntimeConfigV1 | null {
@@ -72,18 +130,90 @@ export function readRuntimeAppConfigSync(paths: AppPaths): AppRuntimeConfigV1 | 
   return null;
 }
 
-export function toPublicRuntimeConfig(cfg: AppRuntimeConfigV1 | null): AppRuntimeConfigPublicV1 {
+function buildWhisperAllowlistFromRaw(whisperModelOptions: unknown): string[] {
+  if (!Array.isArray(whisperModelOptions)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of whisperModelOptions) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const t = item.trim().toLowerCase();
+    if (!t || t.length > 64 || !WHISPER_MODEL_ID_RE.test(t)) {
+      continue;
+    }
+    if (!out.includes(t)) {
+      out.push(t);
+    }
+    if (out.length >= EVAL_MODEL_OPTION_MAX) {
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Shipped defaults (`app-runtime-config.defaults.json`), mtime-cached.
+ * Whisper allowlist is derived from `whisperModelOptions` in that file (regex-validated only).
+ */
+export function readRuntimeAppConfigDefaultsBundle(paths: AppPaths): RuntimeDefaultsBundle {
+  const p = paths.runtimeAppConfigDefaultsPath();
+  try {
+    const st = fs.statSync(p);
+    if (defaultsBundleCache && defaultsBundleCache.mtimeMs === st.mtimeMs) {
+      return defaultsBundleCache.bundle;
+    }
+    const raw = fs.readFileSync(p, "utf-8");
+    const o = JSON.parse(raw) as AppRuntimeConfigV1;
+    const defaults: AppRuntimeConfigV1 = o?.version === 1 ? o : { version: 1 };
+    const bundle: RuntimeDefaultsBundle = {
+      defaults,
+      whisperAllowlist: buildWhisperAllowlistFromRaw(defaults.whisperModelOptions),
+    };
+    defaultsBundleCache = { mtimeMs: st.mtimeMs, bundle };
+    return bundle;
+  } catch {
+    const empty: AppRuntimeConfigV1 = { version: 1 };
+    const bundle: RuntimeDefaultsBundle = { defaults: empty, whisperAllowlist: [] };
+    defaultsBundleCache = { mtimeMs: -1, bundle };
+    return bundle;
+  }
+}
+
+export function toPublicRuntimeConfig(
+  paths: AppPaths,
+  cfg: AppRuntimeConfigV1 | null,
+): AppRuntimeConfigPublicV1 {
   const c = cfg ?? { version: 1 };
+  const { defaults: d } = readRuntimeAppConfigDefaultsBundle(paths);
+  const openaiEvalFb = sanitizeEvalModelOptionList(d.openaiEvalModelOptions, []);
+  const anthropicEvalFb = sanitizeEvalModelOptionList(d.anthropicEvalModelOptions, []);
+  const geminiEvalFb = sanitizeEvalModelOptionList(d.geminiEvalModelOptions, []);
+  const openaiRtModelFb = sanitizeEvalModelOptionList(d.openaiRealtimeModelOptions, []);
+  const openaiRtVoiceFb = sanitizeEvalModelOptionList(d.openaiRealtimeVoiceOptions, []);
+  const geminiLiveModelFb = sanitizeEvalModelOptionList(d.geminiLiveModelOptions, []);
+  const geminiLiveVoiceFb = sanitizeEvalModelOptionList(d.geminiLiveVoiceOptions, []);
+  const whisperOptFb = sanitizeWhisperModelOptionList(paths, d.whisperModelOptions, []);
   return {
     version: 1,
     liveRealtimeProvider: (c.liveRealtimeProvider ?? "").trim(),
     openaiRealtimeModel: (c.openaiRealtimeModel ?? "").trim(),
     openaiRealtimeVoice: (c.openaiRealtimeVoice ?? "").trim(),
     geminiLiveModel: (c.geminiLiveModel ?? "").trim(),
+    geminiLiveVoice: (c.geminiLiveVoice ?? "").trim(),
     llmProvider: (c.llmProvider ?? "").trim(),
     openaiModelId: (c.openaiModelId ?? "").trim(),
     anthropicModelId: (c.anthropicModelId ?? "").trim(),
     geminiModelId: (c.geminiModelId ?? "").trim(),
+    openaiEvalModelOptions: sanitizeEvalModelOptionList(c.openaiEvalModelOptions, openaiEvalFb),
+    anthropicEvalModelOptions: sanitizeEvalModelOptionList(c.anthropicEvalModelOptions, anthropicEvalFb),
+    geminiEvalModelOptions: sanitizeEvalModelOptionList(c.geminiEvalModelOptions, geminiEvalFb),
+    openaiRealtimeModelOptions: sanitizeEvalModelOptionList(c.openaiRealtimeModelOptions, openaiRtModelFb),
+    openaiRealtimeVoiceOptions: sanitizeEvalModelOptionList(c.openaiRealtimeVoiceOptions, openaiRtVoiceFb),
+    geminiLiveModelOptions: sanitizeEvalModelOptionList(c.geminiLiveModelOptions, geminiLiveModelFb),
+    geminiLiveVoiceOptions: sanitizeEvalModelOptionList(c.geminiLiveVoiceOptions, geminiLiveVoiceFb),
+    whisperModelOptions: sanitizeWhisperModelOptionList(paths, c.whisperModelOptions, whisperOptFb),
     openaiApiKeyConfigured: Boolean(c.openaiApiKey?.trim()),
     geminiApiKeyConfigured: Boolean(c.geminiApiKey?.trim()),
     anthropicApiKeyConfigured: Boolean(c.anthropicApiKey?.trim()),
@@ -91,29 +221,69 @@ export function toPublicRuntimeConfig(cfg: AppRuntimeConfigV1 | null): AppRuntim
   };
 }
 
-/** Common `openai-whisper` checkpoint ids accepted by the Server config API. */
-export const WHISPER_MODEL_PRESETS = [
-  "tiny",
-  "base",
-  "small",
-  "medium",
-  "large",
-  "large-v2",
-  "large-v3",
-  "turbo",
-] as const;
+function sanitizeEvalModelOptionList(
+  raw: unknown,
+  fallback: readonly string[],
+): string[] {
+  if (!Array.isArray(raw)) {
+    return [...fallback];
+  }
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const t = item.trim();
+    if (!t || t.length > EVAL_MODEL_OPTION_ITEM_MAX_LEN || !EVAL_MODEL_OPTION_ID_RE.test(t)) {
+      continue;
+    }
+    if (!out.includes(t)) {
+      out.push(t);
+    }
+    if (out.length >= EVAL_MODEL_OPTION_MAX) {
+      break;
+    }
+  }
+  return out.length > 0 ? out : [...fallback];
+}
 
-const WHISPER_MODEL_ID_RE = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
-
-export function isAllowedWhisperModelId(raw: string): boolean {
+export function isAllowedWhisperModelId(paths: AppPaths, raw: string): boolean {
   const t = raw.trim().toLowerCase();
   if (!t || t.length > 64) {
     return false;
   }
-  if ((WHISPER_MODEL_PRESETS as readonly string[]).includes(t)) {
+  const { whisperAllowlist } = readRuntimeAppConfigDefaultsBundle(paths);
+  if (whisperAllowlist.includes(t)) {
     return true;
   }
   return WHISPER_MODEL_ID_RE.test(t);
+}
+
+function sanitizeWhisperModelOptionList(
+  paths: AppPaths,
+  raw: unknown,
+  fallback: readonly string[],
+): string[] {
+  if (!Array.isArray(raw)) {
+    return [...fallback];
+  }
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const t = item.trim().toLowerCase();
+    if (!t || !isAllowedWhisperModelId(paths, item)) {
+      continue;
+    }
+    if (!out.includes(t)) {
+      out.push(t);
+    }
+    if (out.length >= EVAL_MODEL_OPTION_MAX) {
+      break;
+    }
+  }
+  return out.length > 0 ? out : [...fallback];
 }
 
 /**
@@ -155,6 +325,7 @@ export function getMergedAppEnv(paths: AppPaths): NodeJS.ProcessEnv {
       set("OPENAI_REALTIME_MODEL", file.openaiRealtimeModel);
       set("OPENAI_REALTIME_VOICE", file.openaiRealtimeVoice);
       set("GEMINI_LIVE_MODEL", file.geminiLiveModel);
+      set("GEMINI_LIVE_VOICE", file.geminiLiveVoice);
       set("LLM_PROVIDER", file.llmProvider);
       set("OPENAI_MODEL_ID", file.openaiModelId);
       set("ANTHROPIC_MODEL_ID", file.anthropicModelId);
@@ -186,6 +357,25 @@ export async function patchRuntimeAppConfig(
       continue;
     }
     if (v === undefined) {
+      continue;
+    }
+    if (ARRAY_PATCH_KEYS.has(k)) {
+      if (v === null) {
+        delete (next as Record<string, unknown>)[k];
+        continue;
+      }
+      if (!Array.isArray(v)) {
+        continue;
+      }
+      const sanitized =
+        k === "whisperModelOptions"
+          ? sanitizeWhisperModelOptionList(paths, v, [])
+          : sanitizeEvalModelOptionList(v, []);
+      if (sanitized.length === 0) {
+        delete (next as Record<string, unknown>)[k];
+      } else {
+        (next as Record<string, unknown>)[k] = sanitized;
+      }
       continue;
     }
     if (v === null) {

@@ -47,8 +47,9 @@ export function createLiveRealtimeBridgeHandler(
   if (!model) {
     return { ok: false, closeCode: 1013, reason: "GEMINI_LIVE_MODEL not configured" };
   }
+  const geminiLiveVoice = env.GEMINI_LIVE_VOICE?.trim();
   return {
     ok: true,
-    handler: new GeminiLiveBridgeHandler(sessionId, db, paths, model, log, apiKey),
+    handler: new GeminiLiveBridgeHandler(sessionId, db, paths, model, log, apiKey, geminiLiveVoice),
   };
 }

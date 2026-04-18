@@ -30,4 +30,9 @@ export class AppPaths {
   runtimeAppConfigPath(): string {
     return path.join(this.dataDir, "app-runtime-config.json");
   }
+
+  /** Built-in preset option lists when the runtime file omits an array (shipped with the server). */
+  runtimeAppConfigDefaultsPath(): string {
+    return path.join(this.dataDir, "app-runtime-config.defaults.json");
+  }
 }

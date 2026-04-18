@@ -1,5 +1,5 @@
 /**
- * Shared server runtime config UI (API keys, voice bridge, Whisper STT model, evaluation LLM).
+ * Shared server runtime config UI (API keys, voice bridge, Whisper STT model, evaluation LLM model selects).
  * Mount into any container; uses `data-ic` fields only (no global id collisions).
  */
 (function () {
@@ -37,7 +37,7 @@
     "</section>" +
     '<section class="ac-card">' +
     "<h2>Voice bridge (WebSocket)</h2>" +
-    '<p class="ac-hint">Realtime provider lists both vendors; each choice stays disabled until that API key exists. Model ID fields for a vendor unlock when that API key exists (independent of the provider dropdown).</p>' +
+    '<p class="ac-hint">Realtime provider lists both vendors; each choice stays disabled until that API key exists. Model and voice fields unlock per vendor API key. Choices come from <code>app-runtime-config.json</code> (<code>openaiRealtimeModelOptions</code>, …) or, when an array is omitted, from shipped <code>server/data/app-runtime-config.defaults.json</code>. To use another id, add it to the runtime file or edit the defaults file on the server.</p>' +
     "<label>Realtime provider " +
     '<select data-ic="liveRealtimeProvider">' +
     '<option value="">Select…</option>' +
@@ -47,21 +47,28 @@
     '<div class="ic-srv-voice-models">' +
     '<div class="ic-srv-model-col">' +
     '<span class="ic-srv-model-col-title">OpenAI</span>' +
-    "<label>Model ID " +
-    '<input data-ic="openaiRealtimeModel" type="text" autocomplete="off" placeholder="e.g. gpt-4o-realtime-preview-2024-12-17" />' +
-    "</label>" +
+    "<label>Model " +
+    '<select data-ic="openaiRealtimeModel">' +
+    '<option value="">Select…</option>' +
+    "</select></label>" +
     "<label>Voice " +
-    '<input data-ic="openaiRealtimeVoice" type="text" autocomplete="off" placeholder="alloy" />' +
-    "</label></div>" +
+    '<select data-ic="openaiRealtimeVoice">' +
+    '<option value="">Select…</option>' +
+    "</select></label></div>" +
     '<div class="ic-srv-model-col">' +
     '<span class="ic-srv-model-col-title">Gemini</span>' +
-    "<label>Model ID " +
-    '<input data-ic="geminiLiveModel" type="text" autocomplete="off" placeholder="e.g. gemini-2.5-flash-native-audio-preview-12-2025" />' +
-    "</label></div></div>" +
+    "<label>Model " +
+    '<select data-ic="geminiLiveModel">' +
+    '<option value="">Select…</option>' +
+    "</select></label>" +
+    "<label>Voice " +
+    '<select data-ic="geminiLiveVoice">' +
+    '<option value="">Select…</option>' +
+    "</select></label></div></div>" +
     "</section>" +
     '<section class="ac-card">' +
     "<h2>Evaluation LLM</h2>" +
-    '<p class="ac-hint">LLM provider lists all vendors; each option unlocks when that API key exists. Each vendor’s model ID field unlocks when that API key exists (independent of the LLM provider dropdown).</p>' +
+    '<p class="ac-hint">LLM provider lists all vendors; each option unlocks when that API key exists. Models are chosen from <code>app-runtime-config.json</code> eval option arrays or from <code>server/data/app-runtime-config.defaults.json</code> when an array is omitted.</p>' +
     "<label>LLM provider " +
     '<select data-ic="llmProvider">' +
     '<option value="">Select…</option>' +
@@ -72,34 +79,29 @@
     '<div class="ic-srv-eval-models">' +
     '<div class="ic-srv-model-col">' +
     '<span class="ic-srv-model-col-title">OpenAI</span>' +
-    "<label>Model ID " +
-    '<input data-ic="openaiModelId" type="text" autocomplete="off" placeholder="OPENAI_MODEL_ID" />' +
-    "</label></div>" +
+    "<label>Model " +
+    '<select data-ic="openaiModelId">' +
+    '<option value="">Select…</option>' +
+    "</select></label></div>" +
     '<div class="ic-srv-model-col">' +
     '<span class="ic-srv-model-col-title">Anthropic</span>' +
-    "<label>Model ID " +
-    '<input data-ic="anthropicModelId" type="text" autocomplete="off" placeholder="ANTHROPIC_MODEL_ID" />' +
-    "</label></div>" +
+    "<label>Model " +
+    '<select data-ic="anthropicModelId">' +
+    '<option value="">Select…</option>' +
+    "</select></label></div>" +
     '<div class="ic-srv-model-col">' +
     '<span class="ic-srv-model-col-title">Gemini</span>' +
-    "<label>Model ID " +
-    '<input data-ic="geminiModelId" type="text" autocomplete="off" placeholder="GEMINI_MODEL_ID" />' +
-    "</label></div></div>" +
+    "<label>Model " +
+    '<select data-ic="geminiModelId">' +
+    '<option value="">Select…</option>' +
+    "</select></label></div></div>" +
     "</section>" +
     '<section class="ac-card">' +
     "<h2>Local speech-to-text (Whisper)</h2>" +
-    '<p class="ac-hint">Stored as <code>whisperModel</code> in the runtime file (merged as <code>WHISPER_MODEL</code>). Choose <strong>Default</strong> to follow <code>.env</code> / built-in default (<code>base</code>).</p>' +
+    '<p class="ac-hint">Stored as <code>whisperModel</code> (merged as <code>WHISPER_MODEL</code>). Checkpoint list comes from <code>whisperModelOptions</code> in the runtime file or <code>app-runtime-config.defaults.json</code>. <strong>Default</strong> leaves <code>whisperModel</code> unset so <code>.env</code> / built-in default (<code>base</code>) applies.</p>' +
     "<label>Whisper model " +
     '<select data-ic="whisperModel">' +
     '<option value="">Default (.env / base)</option>' +
-    '<option value="tiny">tiny</option>' +
-    '<option value="base">base</option>' +
-    '<option value="small">small</option>' +
-    '<option value="medium">medium</option>' +
-    '<option value="large">large</option>' +
-    '<option value="large-v2">large-v2</option>' +
-    '<option value="large-v3">large-v3</option>' +
-    '<option value="turbo">turbo</option>' +
     "</select></label>" +
     "</section>" +
     "</main>";
@@ -121,6 +123,68 @@
    */
   function asString(v) {
     return typeof v === "string" ? v : "";
+  }
+
+  /**
+   * @param {unknown} v
+   * @returns {string[]}
+   */
+  function asStringArray(v) {
+    if (!Array.isArray(v)) {
+      return [];
+    }
+    var out = [];
+    for (var i = 0; i < v.length; i++) {
+      if (typeof v[i] === "string" && v[i].trim()) {
+        out.push(v[i].trim());
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Rebuilds a model/voice `<select>` from preset options; keeps the first option as empty placeholder.
+   * If the saved value is not in the preset list, adds one extra option so it stays selectable until changed.
+   * @param {HTMLSelectElement | null} sel
+   * @param {string[]} presetOptions
+   * @param {string} selectedValue
+   */
+  function fillModelSelect(sel, presetOptions, selectedValue) {
+    if (!sel || sel.options.length < 1) {
+      return;
+    }
+    var cur = (selectedValue || "").trim();
+    while (sel.options.length > 1) {
+      sel.remove(1);
+    }
+    /** @type {Record<string, boolean>} */
+    var seen = {};
+    for (var j = 0; j < presetOptions.length; j++) {
+      var t = (presetOptions[j] || "").trim();
+      if (!t || seen[t]) {
+        continue;
+      }
+      seen[t] = true;
+      var opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = t;
+      sel.appendChild(opt);
+    }
+    if (cur && !seen[cur]) {
+      var extra = document.createElement("option");
+      extra.value = cur;
+      extra.textContent = cur + " (current)";
+      sel.insertBefore(extra, sel.options[1] || null);
+      seen[cur] = true;
+    }
+    if (!cur) {
+      sel.selectedIndex = 0;
+    } else {
+      sel.value = cur;
+      if (sel.value !== cur) {
+        sel.selectedIndex = 0;
+      }
+    }
   }
 
   /**
@@ -175,14 +239,15 @@
     var btnSave = /** @type {HTMLButtonElement | null} */ (q(mountPoint, "btnSave"));
 
     var liveRealtimeProvider = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "liveRealtimeProvider"));
-    var geminiLiveModel = /** @type {HTMLInputElement | null} */ (q(mountPoint, "geminiLiveModel"));
-    var openaiRealtimeModel = /** @type {HTMLInputElement | null} */ (q(mountPoint, "openaiRealtimeModel"));
-    var openaiRealtimeVoice = /** @type {HTMLInputElement | null} */ (q(mountPoint, "openaiRealtimeVoice"));
+    var geminiLiveModel = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "geminiLiveModel"));
+    var geminiLiveVoice = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "geminiLiveVoice"));
+    var openaiRealtimeModel = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "openaiRealtimeModel"));
+    var openaiRealtimeVoice = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "openaiRealtimeVoice"));
     var llmProvider = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "llmProvider"));
     var whisperModel = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "whisperModel"));
-    var openaiModelId = /** @type {HTMLInputElement | null} */ (q(mountPoint, "openaiModelId"));
-    var anthropicModelId = /** @type {HTMLInputElement | null} */ (q(mountPoint, "anthropicModelId"));
-    var geminiModelId = /** @type {HTMLInputElement | null} */ (q(mountPoint, "geminiModelId"));
+    var openaiModelId = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "openaiModelId"));
+    var anthropicModelId = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "anthropicModelId"));
+    var geminiModelId = /** @type {HTMLSelectElement | null} */ (q(mountPoint, "geminiModelId"));
     var openaiApiKey = /** @type {HTMLInputElement | null} */ (q(mountPoint, "openaiApiKey"));
     var geminiApiKey = /** @type {HTMLInputElement | null} */ (q(mountPoint, "geminiApiKey"));
     var anthropicApiKey = /** @type {HTMLInputElement | null} */ (q(mountPoint, "anthropicApiKey"));
@@ -293,6 +358,9 @@
       if (geminiLiveModel) {
         geminiLiveModel.disabled = !g;
       }
+      if (geminiLiveVoice) {
+        geminiLiveVoice.disabled = !g;
+      }
       if (openaiRealtimeModel) {
         openaiRealtimeModel.disabled = !o;
       }
@@ -359,12 +427,21 @@
       lastLoaded = {
         liveRealtimeProvider: asString(c.liveRealtimeProvider),
         geminiLiveModel: asString(c.geminiLiveModel),
+        geminiLiveVoice: asString(c.geminiLiveVoice),
         openaiRealtimeModel: asString(c.openaiRealtimeModel),
         openaiRealtimeVoice: asString(c.openaiRealtimeVoice),
         llmProvider: asString(c.llmProvider),
         openaiModelId: asString(c.openaiModelId),
         anthropicModelId: asString(c.anthropicModelId),
         geminiModelId: asString(c.geminiModelId),
+        openaiEvalModelOptions: asStringArray(c.openaiEvalModelOptions),
+        anthropicEvalModelOptions: asStringArray(c.anthropicEvalModelOptions),
+        geminiEvalModelOptions: asStringArray(c.geminiEvalModelOptions),
+        openaiRealtimeModelOptions: asStringArray(c.openaiRealtimeModelOptions),
+        openaiRealtimeVoiceOptions: asStringArray(c.openaiRealtimeVoiceOptions),
+        geminiLiveModelOptions: asStringArray(c.geminiLiveModelOptions),
+        geminiLiveVoiceOptions: asStringArray(c.geminiLiveVoiceOptions),
+        whisperModelOptions: asStringArray(c.whisperModelOptions),
         whisperModel: asString(c.whisperModel),
       };
       lastServerKeyFlags = {
@@ -415,27 +492,14 @@
 
       refreshKeyGatedUis();
 
-      if (geminiLiveModel) {
-        geminiLiveModel.value = lastLoaded.geminiLiveModel;
-      }
-      if (openaiRealtimeModel) {
-        openaiRealtimeModel.value = lastLoaded.openaiRealtimeModel;
-      }
-      if (openaiRealtimeVoice) {
-        openaiRealtimeVoice.value = lastLoaded.openaiRealtimeVoice;
-      }
-      if (openaiModelId) {
-        openaiModelId.value = lastLoaded.openaiModelId;
-      }
-      if (anthropicModelId) {
-        anthropicModelId.value = lastLoaded.anthropicModelId;
-      }
-      if (geminiModelId) {
-        geminiModelId.value = lastLoaded.geminiModelId;
-      }
-      if (whisperModel) {
-        whisperModel.value = lastLoaded.whisperModel;
-      }
+      fillModelSelect(openaiRealtimeModel, lastLoaded.openaiRealtimeModelOptions, lastLoaded.openaiRealtimeModel);
+      fillModelSelect(openaiRealtimeVoice, lastLoaded.openaiRealtimeVoiceOptions, lastLoaded.openaiRealtimeVoice);
+      fillModelSelect(geminiLiveModel, lastLoaded.geminiLiveModelOptions, lastLoaded.geminiLiveModel);
+      fillModelSelect(geminiLiveVoice, lastLoaded.geminiLiveVoiceOptions, lastLoaded.geminiLiveVoice);
+      fillModelSelect(openaiModelId, lastLoaded.openaiEvalModelOptions, lastLoaded.openaiModelId);
+      fillModelSelect(anthropicModelId, lastLoaded.anthropicEvalModelOptions, lastLoaded.anthropicModelId);
+      fillModelSelect(geminiModelId, lastLoaded.geminiEvalModelOptions, lastLoaded.geminiModelId);
+      fillModelSelect(whisperModel, lastLoaded.whisperModelOptions, lastLoaded.whisperModel);
     }
 
     async function loadConfig() {
@@ -485,6 +549,7 @@
       return {
         liveRealtimeProvider: "",
         geminiLiveModel: "",
+        geminiLiveVoice: "",
         openaiRealtimeModel: "",
         openaiRealtimeVoice: "",
         llmProvider: "",
@@ -515,6 +580,11 @@
         var g = geminiLiveModel ? geminiLiveModel.value.trim() : "";
         if (g !== baseline.geminiLiveModel) {
           patch.geminiLiveModel = g;
+        }
+
+        var gv = geminiLiveVoice ? geminiLiveVoice.value.trim() : "";
+        if (gv !== baseline.geminiLiveVoice) {
+          patch.geminiLiveVoice = gv;
         }
 
         var orm = openaiRealtimeModel ? openaiRealtimeModel.value.trim() : "";

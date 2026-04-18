@@ -1,6 +1,7 @@
 import {
   EndSensitivity,
   GoogleGenAI,
+  type LiveConnectConfig,
   type LiveServerMessage,
   Modality,
   type Session,
@@ -56,6 +57,7 @@ export class GeminiLiveBridgeHandler extends LiveRealtimeBridgeHandler {
     model: string,
     log: LiveRealtimeBridgeLogger,
     private readonly apiKey: string,
+    private readonly geminiLiveVoice?: string,
   ) {
     super(sessionId, db, paths, model, log);
   }
@@ -96,29 +98,36 @@ export class GeminiLiveBridgeHandler extends LiveRealtimeBridgeHandler {
         return;
       }
       try {
+        const voiceName = this.geminiLiveVoice?.trim();
+        const liveConfig: LiveConnectConfig = {
+          // Native-audio Live models reject `AUDIO`+`TEXT` together ("invalid argument"); transcriptions still stream via `*Transcription` fields.
+          responseModalities: [Modality.AUDIO],
+          systemInstruction,
+          /** Enables `serverContent.inputTranscription` / `outputTranscription` → `realtime-transcriptions.jsonl` + post-process. */
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          proactivity: { proactiveAudio: true },
+          thinkingConfig: { includeThoughts: true },
+          sessionResumption: liveSessionResumptionConfig(liveResumptionHandle),
+          contextWindowCompression: { slidingWindow: {} },
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+              endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+              silenceDurationMs: 1200,
+              prefixPaddingMs: 200,
+            },
+            turnCoverage: TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
+          },
+        };
+        if (voiceName) {
+          liveConfig.speechConfig = {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName } },
+          };
+        }
         const session = await ai.live.connect({
           model: this.model,
-          config: {
-            // Native-audio Live models reject `AUDIO`+`TEXT` together ("invalid argument"); transcriptions still stream via `*Transcription` fields.
-            responseModalities: [Modality.AUDIO],
-            systemInstruction,
-            /** Enables `serverContent.inputTranscription` / `outputTranscription` → `realtime-transcriptions.jsonl` + post-process. */
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            proactivity: { proactiveAudio: true },
-            thinkingConfig: { includeThoughts: true },
-            sessionResumption: liveSessionResumptionConfig(liveResumptionHandle),
-            contextWindowCompression: { slidingWindow: {} },
-            realtimeInputConfig: {
-              automaticActivityDetection: {
-                startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
-                endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
-                silenceDurationMs: 1200,
-                prefixPaddingMs: 200,
-              },
-              turnCoverage: TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
-            },
-          },
+          config: liveConfig,
           callbacks: {
             onopen: () => {
               bridgeOpenedAtWallMs ??= Date.now();

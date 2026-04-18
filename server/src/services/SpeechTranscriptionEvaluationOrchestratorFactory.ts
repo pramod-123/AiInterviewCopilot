@@ -27,9 +27,11 @@ export class SpeechTranscriptionEvaluationOrchestratorFactory {
    */
   create(): SpeechTranscriptionEvaluationOrchestrator {
     const stt = this.speechToTextFactory.create();
+    this.evaluationFactory.create(this.evaluationPromptLog);
     return new SpeechTranscriptionEvaluationOrchestrator(
       stt,
-      this.evaluationFactory.create(this.evaluationPromptLog),
+      this.evaluationFactory,
+      this.evaluationPromptLog,
       this.db,
     );
   }

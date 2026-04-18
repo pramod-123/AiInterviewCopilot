@@ -1,7 +1,8 @@
+import type { FastifyBaseLogger } from "fastify";
 import type { IAppDao } from "../dao/IAppDao.js";
 import type { InterviewEvaluationPayload } from "../types/interviewEvaluation.js";
 import type { SpeechTranscription } from "../types/speechTranscription.js";
-import type { InterviewEvaluator } from "./evaluation/InterviewEvaluationService.js";
+import type { InterviewEvaluationServiceFactory } from "./evaluation/InterviewEvaluationServiceFactory.js";
 import { persistJobEvaluationArtifacts } from "./evaluation/persistJobEvaluationArtifacts.js";
 import type { ISpeechToTextService } from "./speech-to-text/ISpeechToTextService.js";
 
@@ -24,7 +25,8 @@ export type TranscribeAndEvaluateOptions = {
 export class SpeechTranscriptionEvaluationOrchestrator {
   constructor(
     private readonly speechToText: ISpeechToTextService,
-    private readonly evaluation: InterviewEvaluator,
+    private readonly evaluationFactory: InterviewEvaluationServiceFactory,
+    private readonly evaluationPromptLog: FastifyBaseLogger | undefined,
     private readonly db: IAppDao,
   ) {}
 
@@ -66,20 +68,22 @@ export class SpeechTranscriptionEvaluationOrchestrator {
    * Used by live session post-process so tool-calling agents read final rows from the DB.
    */
   async evaluatePersistedJob(jobId: string): Promise<InterviewEvaluationPayload> {
+    const evaluator = this.evaluationFactory.create(this.evaluationPromptLog);
     try {
-      return await this.evaluation.evaluate({ jobId });
+      return await evaluator.evaluate({ jobId });
     } catch (evalErr) {
       const msg = evalErr instanceof Error ? evalErr.message : String(evalErr);
       return {
         status: "failed",
-        provider: this.evaluation.provider,
+        provider: evaluator.provider,
         errorMessage: `Evaluation request failed: ${msg}`,
       };
     }
   }
 
   /**
-   * Transcribes `audioFilePath`, then runs {@link InterviewEvaluator.evaluate}.
+   * Transcribes `audioFilePath`, then runs rubric evaluation via a freshly built evaluator
+   * (so `LLM_PROVIDER` / runtime config changes apply without restarting the server).
    * Evaluation errors are captured as `status: "failed"` (same contract as `AudioJobProcessor`).
    */
   async transcribeAndEvaluate(
