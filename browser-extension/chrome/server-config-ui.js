@@ -98,10 +98,10 @@
     "</section>" +
     '<section class="ac-card">' +
     "<h2>Local speech-to-text (Whisper)</h2>" +
-    '<p class="ac-hint">Stored as <code>whisperModel</code> (merged as <code>WHISPER_MODEL</code>). Checkpoint list comes from <code>whisperModelOptions</code> in the runtime file or <code>server/.app-runtime-config.defaults.json</code>. <strong>Default</strong> leaves <code>whisperModel</code> unset so the Whisper default (<code>base</code>) applies.</p>' +
+    '<p class="ac-hint">Stored as <code>whisperModel</code> (merged as <code>WHISPER_MODEL</code>). Checkpoint list comes from <code>whisperModelOptions</code> in the runtime file or <code>server/.app-runtime-config.defaults.json</code>. Choose <strong>Select…</strong> and save to clear <code>whisperModel</code> so Whisper follows <code>.env</code> / built-in default.</p>' +
     "<label>Whisper model " +
     '<select data-ic="whisperModel">' +
-    '<option value="">Default (.env / base)</option>' +
+    '<option value="">Select…</option>' +
     "</select></label>" +
     "</section>" +
     "</main>";
