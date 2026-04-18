@@ -12,6 +12,8 @@ export type LiveRealtimeTranscriptionPayload = {
   type: "inputTranscription" | "outputTranscription";
   text: string;
   finished: boolean;
+  /** OpenAI: correlates input deltas with `completed` for the same user audio item (item_id + content_index). */
+  itemKey?: string;
 };
 
 export type LiveRealtimeModelAudioPayload = {

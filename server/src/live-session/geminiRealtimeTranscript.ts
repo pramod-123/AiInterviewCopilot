@@ -24,23 +24,58 @@ type FlushedTurn = {
   anchorMs: number;
 };
 
+function recordHasSpan(e: RealtimeTranscriptionRecord): boolean {
+  const s = e.startOffsetFromBridgeOpenMs;
+  const en = e.endOffsetFromBridgeOpenMs;
+  return (
+    typeof s === "number" &&
+    typeof en === "number" &&
+    Number.isFinite(s) &&
+    Number.isFinite(en) &&
+    en > s
+  );
+}
+
+type TimedSegment = {
+  role: "input" | "output";
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
 /**
- * Maps Gemini Live wall-clock offsets onto the merged recording timeline using the same anchor as
+ * Maps Gemini Live transcript lines onto the merged recording timeline using the same anchor as
  * {@link stitchGeminiInterviewerTimelineWav}.
  *
- * Each finished line uses `Date.now()-bridgeOpen` at append time as one instant on the recording
- * clock. Segments use **[t_i, t_{i+1}]** (non-overlapping, monotonic) so a candidate line does not
- * inherit the previous line’s **start** time — that packing caused e.g. first user speech at ~25s
- * on the recording to appear starting at ~14s when the interviewer’s line ended at ~14s.
+ * - **Legacy** lines (single `offsetFromBridgeOpenMs`): coalesce unfinished turns, then pack
+ *   segment ends using the next line’s anchor (same as before).
+ * - **Span** lines (`startOffsetFromBridgeOpenMs` / `endOffsetFromBridgeOpenMs` from buffered Gemini
+ *   flushes): use explicit start/end on the recording clock after `anchorDeltaMs`.
  */
 export function mergeGeminiRealtimeRecordsToUtterances(
   records: RealtimeTranscriptionRecord[],
   anchorDeltaMs: number,
 ): GeminiDerivedUtterance[] {
-  const sorted = [...records].sort((a, b) => {
+  const legacyRecords = [...records].filter((e) => !recordHasSpan(e)).sort((a, b) => {
     const d = a.offsetFromBridgeOpenMs - b.offsetFromBridgeOpenMs;
     return d !== 0 ? d : a.role.localeCompare(b.role);
   });
+
+  const spanSegments: TimedSegment[] = [...records]
+    .filter(recordHasSpan)
+    .sort((a, b) => {
+      const aS = a.startOffsetFromBridgeOpenMs as number;
+      const bS = b.startOffsetFromBridgeOpenMs as number;
+      const d = aS - bS;
+      return d !== 0 ? d : a.role.localeCompare(b.role);
+    })
+    .map((e) => ({
+      role: e.role,
+      text: e.text.trim(),
+      startMs: Math.max(0, (e.startOffsetFromBridgeOpenMs as number) + anchorDeltaMs),
+      endMs: Math.max(0, (e.endOffsetFromBridgeOpenMs as number) + anchorDeltaMs),
+    }))
+    .filter((s) => s.text.length > 0);
 
   const flushed: FlushedTurn[] = [];
 
@@ -56,7 +91,7 @@ export function mergeGeminiRealtimeRecordsToUtterances(
   let pendingIn: { text: string; offset: number } | null = null;
   let pendingOut: { text: string; offset: number } | null = null;
 
-  for (const e of sorted) {
+  for (const e of legacyRecords) {
     if (e.role === "input") {
       pendingIn = { text: e.text, offset: e.offsetFromBridgeOpenMs };
       if (e.finished) {
@@ -79,22 +114,36 @@ export function mergeGeminiRealtimeRecordsToUtterances(
     flush("output", pendingOut.text, pendingOut.offset);
   }
 
-  const utterances: GeminiDerivedUtterance[] = [];
-  let prevEndSec = 0;
+  const legacyTimed: TimedSegment[] = [];
+  let prevEndMs = 0;
   for (let i = 0; i < flushed.length; i++) {
     const { role, text, anchorMs } = flushed[i]!;
-    const idealStartSec = anchorMs / 1000;
-    const startSec = Math.max(prevEndSec, idealStartSec);
-    const nextAnchorSec = i + 1 < flushed.length ? flushed[i + 1]!.anchorMs / 1000 : null;
-    const endSec =
-      nextAnchorSec != null
-        ? Math.max(startSec + 0.05, nextAnchorSec)
-        : startSec + LAST_UTTERANCE_TAIL_SEC;
+    const idealStartMs = anchorMs;
+    const startMs = Math.max(prevEndMs, idealStartMs);
+    const nextAnchorMs = i + 1 < flushed.length ? flushed[i + 1]!.anchorMs : null;
+    const endMs =
+      nextAnchorMs != null
+        ? Math.max(startMs + 50, nextAnchorMs)
+        : startMs + LAST_UTTERANCE_TAIL_SEC * 1000;
+    prevEndMs = endMs;
+    legacyTimed.push({ role, text, startMs, endMs });
+  }
+
+  const combined = [...legacyTimed, ...spanSegments].sort((a, b) => {
+    const d = a.startMs - b.startMs;
+    return d !== 0 ? d : a.endMs - b.endMs;
+  });
+
+  const utterances: GeminiDerivedUtterance[] = [];
+  let prevEndSec = 0;
+  for (const seg of combined) {
+    const startSec = Math.max(prevEndSec, seg.startMs / 1000);
+    const endSec = Math.max(startSec + 0.05, seg.endMs / 1000);
     prevEndSec = endSec;
     const speakerLabel: GeminiDerivedUtterance["speakerLabel"] =
-      role === "input" ? "INTERVIEWEE" : "INTERVIEWER";
+      seg.role === "input" ? "INTERVIEWEE" : "INTERVIEWER";
     utterances.push({
-      segment: new SpeechSegment(startSec, endSec, text),
+      segment: new SpeechSegment(startSec, endSec, seg.text),
       speakerLabel,
     });
   }

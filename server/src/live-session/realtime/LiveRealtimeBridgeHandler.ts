@@ -1,9 +1,12 @@
 import type { IAppDao } from "../../dao/IAppDao.js";
 import type { AppPaths } from "../../infrastructure/AppPaths.js";
-import { appendRealtimeModelAudioChunk, appendRealtimeTranscription } from "../interviewBridgeCapture.js";
+import {
+  appendRealtimeModelAudioChunk,
+  appendRealtimeTranscription,
+  appendRealtimeTranscriptionWallSpan,
+} from "../interviewBridgeCapture.js";
 import type {
   LiveRealtimeModelAudioPayload,
-  LiveRealtimeModelOutputPayload,
   LiveRealtimeModelOutputBatch,
   LiveRealtimeTranscriptionPayload,
 } from "./LiveRealtimeModelOutputBatch.js";
@@ -123,7 +126,7 @@ export abstract class LiveRealtimeBridgeHandler {
     });
   }
 
-  private emitToBrowser(payload: Record<string, unknown>): void {
+  protected sendToBrowser(payload: Record<string, unknown>): void {
     if (this.clientChannel.readyState !== this.clientChannel.OPEN) {
       return;
     }
@@ -134,55 +137,131 @@ export abstract class LiveRealtimeBridgeHandler {
     }
   }
 
-  protected sendToBrowser(payload: Record<string, unknown>): void {
-    this.emitToBrowser(payload);
-  }
-
-  private forwardPayloadsToBrowser(payloads: ReadonlyArray<LiveRealtimeModelOutputPayload>): void {
-    for (const p of payloads) {
-      this.emitToBrowser(p);
-    }
-  }
-
-  protected processModelOutputs(batch: LiveRealtimeModelOutputBatch): void {
+  /** Log + send mapped upstream payloads to the extension (transcription stays server-side). */
+  protected deliverModelOutputBatchToBrowser(batch: LiveRealtimeModelOutputBatch): void {
     this.log.debug({ sessionId: this.sessionId, payload: batch.rawMessageForLog }, "live realtime: onmessage");
-    this.forwardPayloadsToBrowser(batch.payloads);
-    if (batch.bridgeOpenedAtWallMs != null) {
-      void Promise.resolve(this.persistModelOutputs(batch)).catch(() => {});
+    for (const p of batch.payloads) {
+      if (p.type === "inputTranscription" || p.type === "outputTranscription") {
+        continue;
+      }
+      this.sendToBrowser(p as unknown as Record<string, unknown>);
     }
   }
 
-  private async persistModelOutputs(batch: LiveRealtimeModelOutputBatch): Promise<void> {
+  private async writeRealtimeTranscriptionChunk(
+    bridgeOpenedAtWallMs: number,
+    role: "input" | "output",
+    text: string,
+    finished: boolean,
+  ): Promise<void> {
+    await appendRealtimeTranscription(
+      this.paths,
+      this.sessionId,
+      bridgeOpenedAtWallMs,
+      role,
+      text,
+      finished,
+    );
+  }
+
+  private async writeRealtimeTranscriptionWallSpan(
+    bridgeOpenedAtWallMs: number,
+    role: "input" | "output",
+    text: string,
+    startWallMs: number,
+    endWallMs: number,
+  ): Promise<void> {
+    await appendRealtimeTranscriptionWallSpan(
+      this.paths,
+      this.sessionId,
+      bridgeOpenedAtWallMs,
+      role,
+      text,
+      startWallMs,
+      endWallMs,
+    );
+  }
+
+  protected persistRealtimeTranscriptionSpan(
+    bridgeOpenedAtWallMs: number,
+    role: "input" | "output",
+    text: string,
+    startWallMs: number,
+    endWallMs: number,
+  ): Promise<void> {
+    return this.writeRealtimeTranscriptionWallSpan(
+      bridgeOpenedAtWallMs,
+      role,
+      text,
+      startWallMs,
+      endWallMs,
+    );
+  }
+
+  /** Persist `modelAudio` chunks from a batch (post-session stitch / audit). */
+  protected async persistModelAudioAuditFromBatch(batch: LiveRealtimeModelOutputBatch): Promise<void> {
+    const bridgeOpenedAtWallMs = batch.bridgeOpenedAtWallMs;
+    if (bridgeOpenedAtWallMs == null) {
+      return;
+    }
+    const audioPayloads = batch.payloads.filter((p): p is LiveRealtimeModelAudioPayload => p.type === "modelAudio");
+    if (audioPayloads.length === 0) {
+      return;
+    }
     await Promise.all(
-      batch.payloads.map((p) =>
-        p.type === "inputTranscription" || p.type === "outputTranscription"
-          ? this.persistTranscriptionPayload(p, batch.bridgeOpenedAtWallMs)
-          : p.type === "modelAudio"
-            ? this.persistModelAudioPayload(p, batch.bridgeOpenedAtWallMs)
-            : Promise.resolve(),
+      audioPayloads.map((p) =>
+        p.data.length === 0
+          ? Promise.resolve()
+          : appendRealtimeModelAudioChunk(this.db, this.sessionId, bridgeOpenedAtWallMs, p.mimeType, p.data),
       ),
     );
   }
 
-  private persistTranscriptionPayload(p: LiveRealtimeTranscriptionPayload, bridgeOpenedAtWallMs: number | null): Promise<void> {
+  /**
+   * Persist realtime transcript for one upstream batch. Default: one jsonl row per transcription
+   * payload (instant anchor per chunk). Subclasses buffer/aggregate first, then call
+   * {@link persistRealtimeTranscriptionSpan} when a turn is complete.
+   */
+  protected async persistRealtimeTranscriptionForBatch(batch: LiveRealtimeModelOutputBatch): Promise<void> {
+    const bridgeOpenedAtWallMs = batch.bridgeOpenedAtWallMs;
     if (bridgeOpenedAtWallMs == null) {
-      return Promise.resolve();
+      return;
     }
-    return appendRealtimeTranscription(
-      this.paths,
-      this.sessionId,
-      bridgeOpenedAtWallMs,
-      p.type === "inputTranscription" ? "input" : "output",
-      p.text,
-      p.finished,
+    const rows = batch.payloads.filter(
+      (p): p is LiveRealtimeTranscriptionPayload =>
+        p.type === "inputTranscription" || p.type === "outputTranscription",
+    );
+    if (rows.length === 0) {
+      return;
+    }
+    await Promise.all(
+      rows.map((p) =>
+        this.writeRealtimeTranscriptionChunk(
+          bridgeOpenedAtWallMs,
+          p.type === "inputTranscription" ? "input" : "output",
+          p.text,
+          p.finished,
+        ),
+      ),
     );
   }
 
-  private persistModelAudioPayload(p: LiveRealtimeModelAudioPayload, bridgeOpenedAtWallMs: number | null): Promise<void> {
-    if (bridgeOpenedAtWallMs == null || p.data.length === 0) {
-      return Promise.resolve();
-    }
-    return appendRealtimeModelAudioChunk(this.db, this.sessionId, bridgeOpenedAtWallMs, p.mimeType, p.data);
+  /**
+   * One entry point per upstream batch: extension delivery (non-transcription), then when the bridge
+   * clock exists — transcription persist + model audio audit (parallel).
+   */
+  protected processModelOutputs(batch: LiveRealtimeModelOutputBatch): void {
+    void (async () => {
+      this.deliverModelOutputBatchToBrowser(batch);
+      const bridgeOpenedAtWallMs = batch.bridgeOpenedAtWallMs;
+      if (bridgeOpenedAtWallMs == null) {
+        return;
+      }
+      await Promise.all([
+        this.persistRealtimeTranscriptionForBatch(batch),
+        this.persistModelAudioAuditFromBatch(batch),
+      ]);
+    })().catch(() => {});
   }
 
   protected notifyUpstreamError(error: unknown): void {

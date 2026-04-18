@@ -73,6 +73,7 @@ export function openaiRealtimeServerEventToClientPayloads(
           type: "outputTranscription",
           text: state.outputAudioTranscript[key]!,
           finished: false,
+          itemKey: key,
         });
       }
       break;
@@ -91,6 +92,9 @@ export function openaiRealtimeServerEventToClientPayloads(
           type: "outputTranscription",
           text: transcript,
           finished: true,
+          ...(typeof responseId === "string" && typeof itemId === "string"
+            ? { itemKey: outAudioTsKey(responseId, itemId, contentIndex) }
+            : {}),
         });
       }
       break;
@@ -113,6 +117,7 @@ export function openaiRealtimeServerEventToClientPayloads(
           type: "inputTranscription",
           text: state.inputAudioTranscript[key]!,
           finished: false,
+          itemKey: key,
         });
       }
       break;
@@ -129,6 +134,7 @@ export function openaiRealtimeServerEventToClientPayloads(
           type: "inputTranscription",
           text: transcript,
           finished: true,
+          ...(typeof itemId === "string" ? { itemKey: inAudioTsKey(itemId, contentIndex) } : {}),
         });
       }
       break;

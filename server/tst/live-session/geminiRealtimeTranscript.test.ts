@@ -49,6 +49,35 @@ describe("mergeGeminiRealtimeRecordsToUtterances", () => {
   });
 });
 
+describe("mergeGeminiRealtimeRecordsToUtterances span records", () => {
+  it("uses explicit start/end offsets on the recording timeline (plus anchor delta)", () => {
+    const records = [
+      {
+        role: "input" as const,
+        text: "Hi",
+        finished: true,
+        offsetFromBridgeOpenMs: 0,
+        startOffsetFromBridgeOpenMs: 1000,
+        endOffsetFromBridgeOpenMs: 1500,
+      },
+      {
+        role: "output" as const,
+        text: "Hello",
+        finished: true,
+        offsetFromBridgeOpenMs: 0,
+        startOffsetFromBridgeOpenMs: 2000,
+        endOffsetFromBridgeOpenMs: 3500,
+      },
+    ];
+    const u = mergeGeminiRealtimeRecordsToUtterances(records, 500);
+    expect(u).toHaveLength(2);
+    expect(u[0]!.segment.startSec).toBeCloseTo(1.5, 5);
+    expect(u[0]!.segment.endSec).toBeCloseTo(2.0, 5);
+    expect(u[1]!.segment.startSec).toBeCloseTo(2.5, 5);
+    expect(u[1]!.segment.endSec).toBeCloseTo(4.0, 5);
+  });
+});
+
 describe("speechTranscriptionFromGeminiUtterances", () => {
   it("builds SpeechTranscription with gemini_live_realtime provider", () => {
     const u = mergeGeminiRealtimeRecordsToUtterances(

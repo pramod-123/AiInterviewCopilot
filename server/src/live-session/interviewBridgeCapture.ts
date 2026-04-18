@@ -34,7 +34,11 @@ export type RealtimeTranscriptionRecord = {
   role: "input" | "output";
   text: string;
   finished: boolean;
+  /** Legacy single instant (ms since bridge open); used when span fields are absent. */
   offsetFromBridgeOpenMs: number;
+  /** When both set (Gemini buffered flush), segment uses this wall-derived span on the bridge timeline (ms since bridge open). */
+  startOffsetFromBridgeOpenMs?: number;
+  endOffsetFromBridgeOpenMs?: number;
 };
 
 export function parsePcmSampleRateFromMime(mimeType: string): number {
@@ -105,6 +109,43 @@ export async function appendRealtimeTranscription(
   await fs.appendFile(path.join(dir, REALTIME_TRANSCRIPT_LOG), `${JSON.stringify(rec)}\n`, "utf-8");
 }
 
+/**
+ * Append one transcription line with an explicit **wall-clock** span (converted to ms since bridge open).
+ * Used by Gemini Live buffering: input/output token times instead of `Date.now()` at append.
+ */
+export async function appendRealtimeTranscriptionWallSpan(
+  paths: AppPaths,
+  sessionId: string,
+  bridgeOpenedAtWallMs: number,
+  role: "input" | "output",
+  text: string,
+  startWallMs: number,
+  endWallMs: number,
+): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return;
+  }
+  let startOffset = Math.round(startWallMs - bridgeOpenedAtWallMs);
+  let endOffset = Math.round(endWallMs - bridgeOpenedAtWallMs);
+  startOffset = Math.max(0, startOffset);
+  endOffset = Math.max(0, endOffset);
+  if (endOffset <= startOffset) {
+    endOffset = startOffset + 1;
+  }
+  const dir = realtimeAudioDir(paths, sessionId);
+  await fs.mkdir(dir, { recursive: true });
+  const rec: RealtimeTranscriptionRecord = {
+    role,
+    text: trimmed,
+    finished: true,
+    offsetFromBridgeOpenMs: startOffset,
+    startOffsetFromBridgeOpenMs: startOffset,
+    endOffsetFromBridgeOpenMs: endOffset,
+  };
+  await fs.appendFile(path.join(dir, REALTIME_TRANSCRIPT_LOG), `${JSON.stringify(rec)}\n`, "utf-8");
+}
+
 export async function readRealtimeTranscriptionRecords(
   paths: AppPaths,
   sessionId: string,
@@ -125,11 +166,17 @@ export async function readRealtimeTranscriptionRecords(
     try {
       const o = JSON.parse(t) as RealtimeTranscriptionRecord;
       if (o && (o.role === "input" || o.role === "output") && typeof o.text === "string") {
+        const start = Number(o.startOffsetFromBridgeOpenMs);
+        const end = Number(o.endOffsetFromBridgeOpenMs);
+        const hasSpan = Number.isFinite(start) && Number.isFinite(end) && end > start;
         out.push({
           role: o.role,
           text: o.text,
           finished: Boolean(o.finished),
           offsetFromBridgeOpenMs: Number(o.offsetFromBridgeOpenMs) || 0,
+          ...(hasSpan
+            ? { startOffsetFromBridgeOpenMs: start, endOffsetFromBridgeOpenMs: end }
+            : {}),
         });
       }
     } catch {

@@ -5,7 +5,10 @@ import { buildGeminiLiveInterviewerSystemInstruction } from "../../../prompts/bu
 import { initRealtimeAudioCapture } from "../../interviewBridgeCapture.js";
 import { LiveRealtimeBridgeHandler, type LiveRealtimeBridgeLogger } from "../LiveRealtimeBridgeHandler.js";
 import { applyOpenAILiveClientJson } from "./openaiLiveClientInbound.js";
-import { LiveRealtimeModelOutputBatch } from "../LiveRealtimeModelOutputBatch.js";
+import {
+  LiveRealtimeModelOutputBatch,
+  type LiveRealtimeTranscriptionPayload,
+} from "../LiveRealtimeModelOutputBatch.js";
 import {
   createOpenAIRealtimeMapperState,
   openaiRealtimeServerEventToClientPayloads,
@@ -32,6 +35,8 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
   private upstream: WebSocket | null = null;
   private bridgeEnded = false;
   private mapperState: OpenAIRealtimeMapperState = createOpenAIRealtimeMapperState();
+  /** First wall time for a non-empty OpenAI ASR delta (input or output); span written on `finished`. */
+  private openaiTranscriptionFirstWallMsByKey = new Map<string, number>();
   private readonly warnOnce: { warnedInputRate16k?: boolean } = {};
 
   constructor(
@@ -80,6 +85,7 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
         return;
       }
       this.mapperState = createOpenAIRealtimeMapperState();
+      this.openaiTranscriptionFirstWallMsByKey.clear();
 
       const url = `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(this.model)}`;
       let ws: WebSocket;
@@ -184,6 +190,46 @@ export class OpenAILiveBridgeHandler extends LiveRealtimeBridgeHandler {
         temperature: 0.8,
       },
     };
+  }
+
+  protected override async persistRealtimeTranscriptionForBatch(
+    batch: LiveRealtimeModelOutputBatch,
+  ): Promise<void> {
+    const bridgeOpenedAtWallMs = batch.bridgeOpenedAtWallMs;
+    if (bridgeOpenedAtWallMs == null) {
+      return;
+    }
+    const rows = batch.payloads.filter(
+      (p): p is LiveRealtimeTranscriptionPayload =>
+        p.type === "inputTranscription" || p.type === "outputTranscription",
+    );
+    const now = Date.now();
+    for (const p of rows) {
+      const role = p.type === "inputTranscription" ? "input" : "output";
+      const key = p.itemKey ?? (role === "input" ? "__input__" : "__output__");
+      if (!p.finished) {
+        if (!p.text.trim()) {
+          continue;
+        }
+        if (!this.openaiTranscriptionFirstWallMsByKey.has(key)) {
+          this.openaiTranscriptionFirstWallMsByKey.set(key, now);
+        }
+        continue;
+      }
+      if (!p.text.trim()) {
+        this.openaiTranscriptionFirstWallMsByKey.delete(key);
+        continue;
+      }
+      const startWall = this.openaiTranscriptionFirstWallMsByKey.get(key) ?? now;
+      this.openaiTranscriptionFirstWallMsByKey.delete(key);
+      await this.persistRealtimeTranscriptionSpan(
+        bridgeOpenedAtWallMs,
+        role,
+        p.text,
+        startWall,
+        now,
+      );
+    }
   }
 
   private notifyUpstreamOpened(openedAtWallMs: number): void {
