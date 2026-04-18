@@ -1219,8 +1219,6 @@ function renderSessionList(sessions) {
       typeof sess.videoChunkCount === "number" && Number.isFinite(sess.videoChunkCount)
         ? sess.videoChunkCount
         : 0;
-    const liveIv = sess.liveInterviewerEnabled !== false;
-
     const titleText = preview || truncate(id, 36) || "Session";
 
     const rowEl = document.createElement("div");
@@ -1277,13 +1275,6 @@ function renderSessionList(sessions) {
 
     meta.appendChild(spanD);
     meta.appendChild(spanDur);
-    if (!liveIv) {
-      const off = document.createElement("span");
-      off.className = "sess-offline-stt";
-      off.textContent = "Offline STT";
-      off.title = "No live Gemini interviewer; transcript after session end";
-      meta.appendChild(off);
-    }
     btn.appendChild(h);
     btn.appendChild(meta);
 

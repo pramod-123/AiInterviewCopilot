@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Installer: GitHub Releases (server tarball + Chrome extension), host dependencies
-# (Node 20+, ffmpeg/ffprobe, Python, unzip), Python venv (local Whisper), Prisma.
+# (Node 20+, ffmpeg/ffprobe, Python, unzip), optional Python venv (openai-whisper CLI for local STT — not WhisperX), Prisma.
 #
 # One-liner (public GitHub API):
 #   curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh | bash
@@ -181,7 +181,7 @@ install_welcome() {
   printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_DIM}" "Installer · ${VERSION_WIRED}" "${C_ACCENT_B}" "${C_RST}"
   printf '%b╚══════════════════════════════════════════════════════════════╝%b\n' "${C_ACCENT_B}" "${C_RST}"
   say ""
-  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · Python venv (Whisper) · SQLite & .env"
+  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, …) · optional openai-whisper venv (local STT) · SQLite & .env"
   say ""
 }
 
@@ -231,8 +231,8 @@ trim_crlf() {
 # Sets global choose_llm_index: 0=OpenAI, 1=Anthropic.
 choose_llm_provider_menu() {
   local labels=(
-    "OpenAI — LLM evaluation and local Whisper STT (typical setup)"
-    "Anthropic — LLM evaluation only (OpenAI key optional for Whisper / OpenAI-only features)"
+    "OpenAI — LLM evaluation and local STT via openai-whisper CLI (typical setup)"
+    "Anthropic — LLM evaluation only (OpenAI key optional for local STT / OpenAI-only features)"
   )
   local sel=0
   local n=${#labels[@]}
@@ -732,13 +732,13 @@ main() {
       llm_choice="anthropic"
       say "Anthropic will run rubric evaluation (and related LLM calls). Speech-to-text uses local Whisper (STT_PROVIDER=local)."
       anthropic_key="$(trim_crlf "$(read_secret_prompt "Anthropic API key (Enter to skip)")")"
-      openai_key="$(trim_crlf "$(read_secret_prompt "OpenAI API key — optional for Whisper / OpenAI features (Enter to skip)")")"
+      openai_key="$(trim_crlf "$(read_secret_prompt "OpenAI API key — optional for remote STT / OpenAI features (Enter to skip)")")"
       if [[ -z "$openai_key" ]]; then
         say "No OpenAI key — add OPENAI_API_KEY in .env before using OpenAI-backed features."
       fi
     else
       llm_choice="openai"
-      say "OpenAI will power LLM evaluation and (with the local Whisper venv) offline speech-to-text."
+      say "OpenAI will power LLM evaluation and (with the optional openai-whisper venv) offline speech-to-text."
       openai_key="$(trim_crlf "$(read_secret_prompt "OpenAI API key (Enter to skip)")")"
       anthropic_key=""
     fi
@@ -800,15 +800,15 @@ main() {
   tick_done "Database schema applied (Prisma)"
   bump_install_progress "Prisma"
 
-  banner "Python: local Whisper CLI (offline STT)"
+  banner "Python: openai-whisper CLI (local STT, no WhisperX)"
   local venv_whisper="${INSTALL_PREFIX}/venv-whisper"
   if [[ "${INSTALL_SKIP_PYTHON_VENVS:-}" == "1" ]]; then
-    say_dim "INSTALL_SKIP_PYTHON_VENVS=1: skipping local Whisper venv."
-    tick_done "Local Whisper venv skipped"
-  elif prompt_yn "Create venv and pip install openai-whisper (for STT_PROVIDER=local)?" "y"; then
+    say_dim "INSTALL_SKIP_PYTHON_VENVS=1: skipping openai-whisper venv."
+    tick_done "openai-whisper venv skipped"
+  elif prompt_yn "Create venv and pip install openai-whisper (STT_PROVIDER=local; plain Whisper CLI, not WhisperX)?" "y"; then
     python3 -m venv "${venv_whisper}"
     "${venv_whisper}/bin/pip" install -U pip setuptools wheel
-    say_dim "Installing openai-whisper…"
+    say_dim "Installing openai-whisper (CLI only; no pyannote / WhisperX)…"
     "${venv_whisper}/bin/pip" install "openai-whisper"
     local whisper_sh="${INSTALL_PREFIX}/bin/whisper"
     mkdir -p "${INSTALL_PREFIX}/bin"
@@ -818,11 +818,11 @@ exec "${venv_whisper}/bin/whisper" "\$@"
 EOF
     chmod +x "${whisper_sh}"
     upsert_env_line "LOCAL_WHISPER_EXECUTABLE" "LOCAL_WHISPER_EXECUTABLE=${whisper_sh}"
-    tick_done "Local Whisper CLI ready (${whisper_sh})"
+    tick_done "openai-whisper CLI ready (${whisper_sh})"
   else
-    tick_done "Local Whisper venv declined"
+    tick_done "openai-whisper venv declined"
   fi
-  bump_install_progress "Local Whisper"
+  bump_install_progress "openai-whisper"
 
   banner "Chrome extension"
   EXT_DIR="${INSTALL_PREFIX}/chrome-extension"

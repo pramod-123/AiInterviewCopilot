@@ -143,7 +143,7 @@ export class LiveSessionPostProcessor {
               geminiChunkCount: dialogueMerge.chunkCount,
               transcriptHint:
                 transcriptSource === "gemini_live_realtime"
-                  ? "Transcript and speaker labels from live voice bridge realtime (input/output transcription in gemini-audio/realtime-transcriptions.jsonl); local STT skipped when this path is used."
+                  ? "Transcript and speaker labels from live voice bridge realtime (input/output transcription in live-bridge-transcription/realtime-transcriptions.jsonl); local STT skipped when this path is used."
                   : "When realtime transcript is unavailable, STT uses tab/mic audio.wav; speaker labels are not inferred (null unless present on segments).",
             }
           : undefined,

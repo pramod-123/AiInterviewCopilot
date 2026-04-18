@@ -5,6 +5,9 @@ import type { AppPaths } from "../infrastructure/AppPaths.js";
 
 const REALTIME_TRANSCRIPT_LOG = "realtime-transcriptions.jsonl";
 
+/** Directory under each live session for bridge transcript + related files. */
+export const LIVE_BRIDGE_TRANSCRIPTION_DIR = "live-bridge-transcription";
+
 /** Anchor for chunk offsets (stored on the live session as `voiceRealtimeBridgeOpenedAtWallMs`). */
 export type VoiceRealtimeAudioBridgeMeta = {
   version: 1;
@@ -56,8 +59,7 @@ export function pcmS16leMonoDurationMs(numBytes: number, sampleRate: number): nu
 }
 
 export function realtimeAudioDir(paths: AppPaths, sessionId: string): string {
-  // Keep legacy folder name for backward compatibility with existing session artifacts.
-  return path.join(paths.liveSessionDir(sessionId), "gemini-audio");
+  return path.join(paths.liveSessionDir(sessionId), LIVE_BRIDGE_TRANSCRIPTION_DIR);
 }
 
 export async function readVoiceRealtimeAudioBridgeMeta(

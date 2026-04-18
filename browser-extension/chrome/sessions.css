@@ -703,16 +703,6 @@ html[data-theme="dark"] .sess-bulk-delete-btn:not(:disabled):hover {
   color: var(--text-muted);
 }
 
-.sess-offline-stt {
-  width: 100%;
-  font-size: 0.62rem;
-  color: var(--text-dim);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 1px 6px;
-  border-radius: 4px;
-  box-sizing: border-box;
-}
-
 .sess-session-meta .material-icons-round {
   font-size: 14px;
 }
