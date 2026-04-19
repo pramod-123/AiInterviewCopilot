@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { closeAppDatabase, openAppDatabase } from "./db.js";
 import { InterviewCopilotServer } from "./InterviewCopilotServer.js";
 import { AppPaths } from "./infrastructure/AppPaths.js";
