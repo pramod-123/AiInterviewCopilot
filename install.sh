@@ -182,7 +182,7 @@ install_welcome() {
   printf '%b║%b  %-58s%b║%b\n' "${C_ACCENT_B}" "${C_DIM}" "Installer · ${VERSION_WIRED}" "${C_ACCENT_B}" "${C_RST}"
   printf '%b╚══════════════════════════════════════════════════════════════╝%b\n' "${C_ACCENT_B}" "${C_RST}"
   say ""
-  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, Python 3, jq, …) · openai-whisper venv (required local STT) · SQLite + .app-runtime-config.json (databaseUrl, listenHost, listenPort, keys; .env optional)"
+  say_dim "Release server + Chrome extension · host tools (ffmpeg/ffprobe, Python 3, jq, …) · openai-whisper venv (required local STT) · SQLite + .app-runtime-config.json (databaseUrl, listenHost, listenPort, keys). Optional .env: dotenv loads HOST, PORT, DATABASE_URL for the server and Prisma CLI."
   say ""
 }
 
