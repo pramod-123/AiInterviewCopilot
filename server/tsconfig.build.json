@@ -8,5 +8,5 @@
     "sourceMap": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "tst"]
+  "exclude": ["node_modules", "dist", "tst", "src/services/srt-generator/**"]
 }

@@ -167,7 +167,6 @@ export async function stitchGeminiInterviewerTimelineWav(params: {
     for (const b of await flushPendingToTimeline24k(pending)) {
       yield b;
     }
-    pending = null;
   }
 
   const source = Readable.from(stitchedPcm24k(), { objectMode: false });
