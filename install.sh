@@ -662,7 +662,6 @@ merge_app_runtime_config_snippet() {
     --arg l "$llm_choice" \
     --arg w "$whisper_sh" \
     --arg lr "$live_rt" \
-    --argjson setdef "${setdef_json}" \
     --argjson patchPv "${patch_pv_json}" \
     '
     .[0] as $raw
