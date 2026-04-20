@@ -1,6 +1,7 @@
 const DEFAULT_API = "http://127.0.0.1:3001";
 
 const apiBaseInput = document.getElementById("apiBase");
+const btnNewInterview = document.getElementById("btnNewInterview");
 const sessSidebarBulk = document.getElementById("sessSidebarBulk");
 const btnBulkDeleteSessions = document.getElementById("btnBulkDeleteSessions");
 const bulkDeleteLabel = document.getElementById("bulkDeleteLabel");
@@ -1745,6 +1746,34 @@ btnSidebarReload?.addEventListener("click", () => {
 apiBaseInput?.addEventListener("change", () => {
   void saveApiBase();
   void syncInterviewApiBanner();
+});
+
+btnNewInterview?.addEventListener("click", () => {
+  void (async () => {
+    setListStatus("Opening LeetCode side panel for a new interview…", false);
+    try {
+      await saveApiBase();
+      const res = await chrome.runtime.sendMessage({
+        type: "IC_PREPARE_NEW_INTERVIEW_ON_LEETCODE",
+        apiBase: apiBase(),
+      });
+      if (!res?.ok) {
+        setListStatus(
+          res?.reason === "no_leetcode_tab"
+            ? "No LeetCode tab found. Open a problem tab in Chrome, then click New interview again."
+            : `Could not open side panel: ${res?.reason || "unknown error"}.`,
+          true,
+        );
+        return;
+      }
+      setListStatus(
+        "Side panel opened on your LeetCode tab — use Start interview when you are ready (toolbar popup is optional).",
+        false,
+      );
+    } catch (e) {
+      setListStatus(e instanceof Error ? e.message : String(e), true);
+    }
+  })();
 });
 
 btnSidebarToggle?.addEventListener("click", () => {

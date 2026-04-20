@@ -2,8 +2,8 @@ const metaEl = document.getElementById("meta");
 const logEntriesEl = document.getElementById("logEntries");
 const logScrollEl = document.getElementById("logScroll");
 const btnStart = document.getElementById("btnStart");
-const btnStop = document.getElementById("btnStop");
 const btnEnd = document.getElementById("btnEnd");
+const btnCancelInterview = document.getElementById("btnCancelInterview");
 const chkMic = document.getElementById("chkMic");
 const chkVoiceAi = document.getElementById("chkVoiceAi");
 const voiceAiStatusEl = document.getElementById("voiceAiStatus");
@@ -70,6 +70,8 @@ let voiceInterviewerBridgeHandle = null;
 
 /** @type {number | null} */
 let recordingWallClockId = null;
+
+let sidePanelVisibilityReconcileRegistered = false;
 
 function formatMmSs(totalSec) {
   const s = Math.max(0, Math.floor(totalSec));
@@ -157,7 +159,7 @@ function syncCaptureUi() {
       voiceAiStatusEl.textContent = "Needs mic";
     } else {
       voiceAiStatusEl.classList.add("idle");
-      voiceAiStatusEl.textContent = "Starts with recording";
+      voiceAiStatusEl.textContent = "Starts with interview";
     }
   }
 }
@@ -291,7 +293,7 @@ function log(line) {
     }
     const row = document.createElement("div");
     row.className = "log-row";
-    if (/Session ended on server\.|Interview result ready|Processing complete\./i.test(line)) {
+    if (/Session ended on server\.|Interview ended on server\.|Interview result ready|Processing complete\./i.test(line)) {
       row.classList.add("log-row-highlight");
     }
     if (pulse) {
@@ -356,6 +358,86 @@ async function closeExtensionSidePanel() {
 
 function tabIdValid() {
   return Number.isInteger(leetcodeTabId) && leetcodeTabId >= 0;
+}
+
+function syncCancelInterviewButton() {
+  if (!btnCancelInterview) {
+    return;
+  }
+  const hasSession = typeof sessionId === "string" && sessionId.trim().length > 0;
+  btnCancelInterview.hidden = !hasSession;
+  btnCancelInterview.disabled = !hasSession;
+  btnCancelInterview.setAttribute("aria-hidden", hasSession ? "false" : "true");
+}
+
+/**
+ * Drops `sessionId` from `pendingRecorder` while keeping tab + API intent so the user can start a new interview.
+ */
+async function stripSessionIdFromPendingRecorder() {
+  sessionId = "";
+  await chrome.storage.session.set({
+    pendingRecorder: {
+      apiBase,
+      tabId: leetcodeTabId,
+      liveInterviewerEnabled: sessionAllowsLiveInterviewer,
+    },
+  });
+  syncCancelInterviewButton();
+}
+
+/**
+ * If the stored session no longer exists or has ended, clear it locally so the panel does not show a stale interview.
+ * @returns {Promise<boolean>} true when `sessionId` was cleared
+ */
+async function reconcilePendingRecorderWithServer() {
+  if (!sessionId || !apiBase) {
+    return false;
+  }
+  try {
+    const res = await fetch(`${apiBase}/api/live-sessions/${encodeURIComponent(sessionId)}`);
+    if (res.status === 404) {
+      await stripSessionIdFromPendingRecorder();
+      return true;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (data.status === "ENDED") {
+      await stripSessionIdFromPendingRecorder();
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function ensureSidePanelVisibilityReconcileListener() {
+  if (sidePanelVisibilityReconcileRegistered) {
+    return;
+  }
+  sidePanelVisibilityReconcileRegistered = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden || !apiBase || !tabIdValid()) {
+      return;
+    }
+    void (async () => {
+      const cleared = await reconcilePendingRecorderWithServer();
+      if (cleared) {
+        window.location.reload();
+      }
+    })();
+  });
+}
+
+function formatRecorderMetaLine(serverInterviewPipelineEnabled) {
+  const tabPart = `practice tab #${leetcodeTabId} · ${apiBase}`;
+  if (!sessionId) {
+    return serverInterviewPipelineEnabled
+      ? `Not started — ${tabPart} · Start interview to create a server session`
+      : `Server needs configuration · ${tabPart}`;
+  }
+  return serverInterviewPipelineEnabled
+    ? `Session ${sessionId} · ${tabPart}`
+    : `Session ${sessionId} · Server needs configuration · ${apiBase}`;
 }
 
 /**
@@ -1239,7 +1321,6 @@ function resetAfterCapturePipeStops(reason) {
   stopRecordingWallClock();
   lastUploadedCode = null;
   btnStart.disabled = false;
-  btnStop.disabled = true;
   if (chkMic) {
     chkMic.disabled = false;
   }
@@ -1260,7 +1341,6 @@ async function stopAll(reason) {
   lastUploadedCode = null;
   stopTabCapture();
   btnStart.disabled = false;
-  btnStop.disabled = true;
   if (chkMic) {
     chkMic.disabled = false;
   }
@@ -1318,8 +1398,7 @@ async function resolveSessionConfig() {
   }
 
   const { pendingRecorder } = await chrome.storage.session.get(["pendingRecorder"]);
-  if (pendingRecorder && typeof pendingRecorder.sessionId === "string") {
-    sessionId = pendingRecorder.sessionId;
+  if (pendingRecorder) {
     apiBase = String(pendingRecorder.apiBase || "")
       .trim()
       .replace(/\/$/, "");
@@ -1327,6 +1406,10 @@ async function resolveSessionConfig() {
       typeof pendingRecorder.tabId === "number" ? pendingRecorder.tabId : Number.NaN;
     if (typeof pendingRecorder.liveInterviewerEnabled === "boolean") {
       sessionAllowsLiveInterviewer = pendingRecorder.liveInterviewerEnabled;
+    }
+    const sid = pendingRecorder.sessionId;
+    if (typeof sid === "string" && sid.trim()) {
+      sessionId = sid.trim();
     }
   }
 }
@@ -1371,11 +1454,13 @@ function applyVoiceAiSessionPolicy() {
  * Re-fetch server interview readiness after Server config Save (storage bump) without reloading the panel.
  */
 async function refreshSidepanelAfterRuntimeConfigSave() {
-  if (!sessionId || !apiBase || !tabIdValid()) {
+  if (!apiBase || !tabIdValid()) {
     return;
   }
   const recording = tabRecorder != null && tabRecorder.state !== "inactive";
-  await syncSessionLiveInterviewerFromServer();
+  if (sessionId) {
+    await syncSessionLiveInterviewerFromServer();
+  }
   applyVoiceAiSessionPolicy();
 
   let serverInterviewPipelineEnabled = true;
@@ -1419,10 +1504,9 @@ async function refreshSidepanelAfterRuntimeConfigSave() {
   }
 
   if (metaEl) {
-    metaEl.textContent = serverInterviewPipelineEnabled
-      ? `Session ${sessionId} · practice tab #${leetcodeTabId} · ${apiBase}`
-      : `Session ${sessionId} · Server needs configuration · ${apiBase}`;
+    metaEl.textContent = formatRecorderMetaLine(serverInterviewPipelineEnabled);
   }
+  syncCancelInterviewButton();
   syncCaptureUi();
 }
 
@@ -1450,6 +1534,7 @@ async function applyLiveRealtimeServerKeyGate() {
 }
 
 async function init() {
+  ensureSidePanelVisibilityReconcileListener();
   await resolveSessionConfig();
   await hydrateApiBaseFromStorageIfEmpty();
 
@@ -1461,7 +1546,7 @@ async function init() {
     chkMic.checked = preferRecordMic;
   }
 
-  if (!sessionId || !apiBase || !tabIdValid()) {
+  if (!apiBase || !tabIdValid()) {
     if (metaEl) {
       metaEl.textContent =
         "Use the toolbar popup → Start interview on a supported practice tab (that opens this side panel with a session).";
@@ -1476,12 +1561,20 @@ async function init() {
     hideProcessStatus();
     clearResultSection();
     stopRecordingWallClock();
+    syncCancelInterviewButton();
     syncCaptureUi();
     mountSpServerConfigOnce();
     return;
   }
 
-  await syncSessionLiveInterviewerFromServer();
+  const clearedStaleSession = await reconcilePendingRecorderWithServer();
+  if (clearedStaleSession) {
+    log("Previous interview ended on the server — you can start a new one from this tab.");
+  }
+
+  if (sessionId) {
+    await syncSessionLiveInterviewerFromServer();
+  }
   applyVoiceAiSessionPolicy();
 
   let serverInterviewPipelineEnabled = true;
@@ -1516,10 +1609,9 @@ async function init() {
   }
 
   if (metaEl) {
-    metaEl.textContent = serverInterviewPipelineEnabled
-      ? `Session ${sessionId} · practice tab #${leetcodeTabId} · ${apiBase}`
-      : `Session ${sessionId} · Server needs configuration · ${apiBase}`;
+    metaEl.textContent = formatRecorderMetaLine(serverInterviewPipelineEnabled);
   }
+  syncCancelInterviewButton();
 
   mountSpServerConfigOnce();
 
@@ -1574,8 +1666,66 @@ async function init() {
   syncCaptureUi();
 
   btnStart.addEventListener("click", async () => {
-    if (!sessionId || !apiBase || !tabIdValid()) {
+    if (!apiBase || !tabIdValid()) {
       return;
+    }
+
+    if (!sessionId) {
+      let serverInterviewPipelineEnabled = true;
+      if (typeof window.ICFetchInterviewApiEnabled === "function") {
+        serverInterviewPipelineEnabled = await window.ICFetchInterviewApiEnabled(apiBase);
+      }
+      if (!serverInterviewPipelineEnabled) {
+        log("Interview pipeline is not available on this server — fix Server settings first.");
+        return;
+      }
+      log("Creating server session…");
+      try {
+        const res = await fetch(`${apiBase}/api/live-sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ liveInterviewerEnabled: sessionAllowsLiveInterviewer }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          log(data.error || `live-sessions HTTP ${res.status}`);
+          return;
+        }
+        const sid = data.id;
+        if (typeof sid !== "string" || !sid.trim()) {
+          log("Unexpected response (no session id)");
+          return;
+        }
+        sessionId = sid.trim();
+        await chrome.storage.session.set({
+          pendingRecorder: {
+            sessionId,
+            apiBase,
+            tabId: leetcodeTabId,
+            liveInterviewerEnabled: sessionAllowsLiveInterviewer,
+          },
+        });
+        await syncSessionLiveInterviewerFromServer();
+        applyVoiceAiSessionPolicy();
+        await applyLiveRealtimeServerKeyGate();
+        const { preferVoiceAi: pva } = await chrome.storage.local.get(["preferVoiceAi"]);
+        if (
+          sessionAllowsLiveInterviewer &&
+          chkVoiceAi &&
+          typeof pva === "boolean" &&
+          !chkVoiceAi.disabled
+        ) {
+          chkVoiceAi.checked = pva;
+        }
+        if (metaEl) {
+          metaEl.textContent = formatRecorderMetaLine(serverInterviewPipelineEnabled);
+        }
+        syncCancelInterviewButton();
+        syncCaptureUi();
+      } catch (e) {
+        log(`Creating session failed: ${e instanceof Error ? e.message : String(e)}`);
+        return;
+      }
     }
 
     try {
@@ -1672,8 +1822,8 @@ async function init() {
       }, sliceMs);
 
       btnStart.disabled = true;
-      btnStop.disabled = false;
       btnEnd.disabled = false;
+      syncCancelInterviewButton();
       if (chkMic) {
         chkMic.disabled = true;
       }
@@ -1733,8 +1883,31 @@ async function init() {
     }
   });
 
-  btnStop.addEventListener("click", () => {
-    void stopAll("Capture stopped.");
+  btnCancelInterview?.addEventListener("click", () => {
+    if (!sessionId || !apiBase) {
+      return;
+    }
+    void (async () => {
+      const recording = tabRecorder != null && tabRecorder.state !== "inactive";
+      if (recording) {
+        await stopAll(null);
+      }
+      try {
+        const res = await fetch(`${apiBase}/api/live-sessions/${encodeURIComponent(sessionId)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok && res.status !== 404) {
+          const data = await res.json().catch(() => ({}));
+          log(data.error || `cancel interview HTTP ${res.status}`);
+          return;
+        }
+        log("Interview cancelled — session removed from the server.");
+        await stripSessionIdFromPendingRecorder();
+        window.location.reload();
+      } catch (e) {
+        log(`Cancel interview failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })();
   });
 
   btnEnd.addEventListener("click", async () => {
@@ -1746,12 +1919,12 @@ async function init() {
         log(`end session: ${data.error || res.status}`);
         return;
       }
-      log("Session ended on server.");
+      log("Interview ended on server.");
       btnEnd.disabled = true;
-      await chrome.storage.session.remove(["pendingRecorder"]);
+      const endedId = sessionId;
+      await stripSessionIdFromPendingRecorder();
       hideProcessStatus();
       clearResultSection();
-      const endedId = sessionId;
       const dashUrl = chrome.runtime.getURL(
         `sessions.html?session=${encodeURIComponent(endedId)}`,
       );
@@ -1805,6 +1978,23 @@ if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged)
       return;
     }
     void refreshSidepanelAfterRuntimeConfigSave();
+  });
+}
+
+if (typeof chrome !== "undefined" && chrome.storage?.session?.onChanged) {
+  chrome.storage.session.onChanged.addListener((changes) => {
+    if (!changes.pendingRecorder) {
+      return;
+    }
+    const next = changes.pendingRecorder.newValue;
+    const nextSid = next && typeof next.sessionId === "string" ? next.sessionId.trim() : "";
+    const cur = typeof sessionId === "string" ? sessionId.trim() : "";
+    if (!cur) {
+      return;
+    }
+    if (nextSid !== cur) {
+      window.location.reload();
+    }
   });
 }
 

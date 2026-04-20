@@ -163,7 +163,6 @@ document.getElementById("start").addEventListener("click", async () => {
     preferRecordMic: wantMic,
     preferLiveInterviewer: liveInterviewerEnabled,
   });
-  setStatus("Creating session…");
 
   try {
     const [active] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
@@ -192,22 +191,7 @@ document.getElementById("start").addEventListener("click", async () => {
       }
     }
 
-    setStatus("Creating session…");
-    const res = await fetch(`${apiBase}/api/live-sessions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ liveInterviewerEnabled }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setStatus(data.error || `HTTP ${res.status}`, true);
-      return;
-    }
-    const sessionId = data.id;
-    if (!sessionId) {
-      setStatus("Unexpected response (no session id).", true);
-      return;
-    }
+    setStatus("Opening side panel…");
 
     if (typeof chrome.sidePanel?.open !== "function") {
       setStatus("Side panel API missing — use Chrome 114+.", true);
@@ -221,7 +205,7 @@ document.getElementById("start").addEventListener("click", async () => {
     }
 
     await chrome.storage.session.set({
-      pendingRecorder: { sessionId, apiBase, tabId, liveInterviewerEnabled },
+      pendingRecorder: { apiBase, tabId, liveInterviewerEnabled },
     });
 
     await chrome.sidePanel.setOptions({
@@ -232,7 +216,7 @@ document.getElementById("start").addEventListener("click", async () => {
 
     await chrome.sidePanel.open({ windowId: tab.windowId });
 
-    setStatus("Side panel opened — use it to start recording.");
+    setStatus("Side panel opened — click Start interview there to create the session.");
     window.close();
   } catch (e) {
     setStatus(e instanceof Error ? e.message : String(e), true);

@@ -1212,19 +1212,6 @@ body.is-recording #btnStart {
   filter: none;
 }
 
-#btnStop {
-  background: var(--surface-bright);
-  color: var(--on-surface);
-  border: 1px solid rgba(53, 47, 61, 0.45);
-}
-
-body.is-recording #btnStop:not(:disabled) {
-  background: var(--primary);
-  color: var(--on-primary);
-  border: none;
-  box-shadow: 0 0 20px -5px rgba(var(--primary-rgb), 0.4);
-}
-
 #btnEnd {
   background: transparent;
   color: var(--on-surface-variant);
@@ -1234,6 +1221,22 @@ body.is-recording #btnStop:not(:disabled) {
 #btnEnd:not(:disabled) {
   color: var(--on-surface);
   background: var(--surface-bright);
+}
+
+/* Ensure cancel stays out of layout when there is no active server session (e.g. after end / new interview). */
+#btnCancelInterview[hidden] {
+  display: none !important;
+}
+
+#btnCancelInterview.sp-btn-cancel-interview {
+  background: transparent;
+  color: var(--danger, #c62828);
+  border: 1px solid rgba(198, 40, 40, 0.45);
+  font-weight: 700;
+}
+
+#btnCancelInterview.sp-btn-cancel-interview:not(:disabled):hover {
+  filter: brightness(1.06);
 }
 
 /* Evidence timestamps (shared resultView markup) — keyboard focus */
