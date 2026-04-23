@@ -25,7 +25,7 @@ const EVAL_MODEL_OPTION_MAX = 10;
 const EVAL_MODEL_OPTION_ITEM_MAX_LEN = 128;
 
 const LIVE_PROVIDERS = new Set(["gemini", "openai"]);
-const LLM_PROVIDERS = new Set(["openai", "anthropic", "gemini"]);
+const LLM_PROVIDERS = new Set(["openai", "anthropic", "gemini", "ollama"]);
 const EVAL_PROVIDERS = new Set(["llm", "single-agent"]);
 const LOCAL_WHISPER_EXE_MAX_LEN = 4096;
 const DATABASE_URL_MAX_LEN = 2048;
@@ -124,7 +124,7 @@ function validateAppConfigPatch(paths: AppPaths, raw: Record<string, unknown>): 
     }
     const t = lp.trim().toLowerCase();
     if (t && !LLM_PROVIDERS.has(t)) {
-      return `llmProvider must be openai, anthropic, or gemini (got "${lp}").`;
+      return `llmProvider must be openai, anthropic, gemini, or ollama (got "${lp}").`;
     }
   }
   const ep = raw.evaluationProvider;

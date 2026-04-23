@@ -200,7 +200,7 @@ See **[README — HTTP API (summary)](../README.md#http-api-summary)** for the r
 ##### Evaluation / STT factories
 
 - **`SpeechToTextServiceFactory`** — this product build **always** uses the local Python **`whisper`** CLI (`getSpeechToTextProviderMode` hardcodes **`local`**); the remote OpenAI Whisper path remains in code for maintenance. Model via **`WHISPER_MODEL`** / **`LOCAL_WHISPER_MODEL`** in `.env`; optional **`REMOTE_STT_MAX_CHUNK_BYTES`** only applies if the remote branch is re-enabled.
-- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = **`llm`** (one-shot) \| **`single-agent`** (tool agent); **`LLM_PROVIDER`** = **`openai`** \| **`anthropic`** (shared with **`LlmClientFactory`**); **`OPENAI_MODEL_ID`** / **`ANTHROPIC_MODEL_ID`**; builds **`InterviewEvaluationService`** or **`SingleAgentInterviewEvaluator`**.
+- **`InterviewEvaluationServiceFactory`** — `EVALUATION_PROVIDER` = **`llm`** (one-shot) \| **`single-agent`** (tool agent); **`LLM_PROVIDER`** = **`openai`** \| **`anthropic`** \| **`gemini`** \| **`ollama`** (shared with **`LlmClientFactory`**); per-provider model env vars; builds **`InterviewEvaluationService`** or **`SingleAgentInterviewEvaluator`**.
 
 ---
 
@@ -235,9 +235,11 @@ Shared concepts: **`ffmpegExtract`**, **`transcriptFormatting`**, **`editorRoiDe
 | `ANTHROPIC_API_KEY` | Required when `LLM_PROVIDER=anthropic` |
 | `REMOTE_STT_MAX_CHUNK_BYTES` | Optional; only used if remote STT branch is enabled in code |
 | `EVALUATION_PROVIDER` | Exactly **`llm`** or **`single-agent`** (evaluator mode) |
-| `LLM_PROVIDER` | Exactly **`openai`** or **`anthropic`** (app-wide chat LLM: eval, `LlmClientFactory`) |
+| `LLM_PROVIDER` | **`openai`**, **`anthropic`**, **`gemini`**, or **`ollama`** (app-wide chat LLM: eval, `LlmClientFactory`) |
 | `OPENAI_MODEL_ID` | Chat/eval/vision model on OpenAI (ROI uses the same model) |
 | `ANTHROPIC_MODEL_ID` | e.g. `claude-opus-4-6` when `LLM_PROVIDER=anthropic` |
+| `GEMINI_API_KEY`, `GEMINI_MODEL_ID` | When `LLM_PROVIDER=gemini` |
+| `OLLAMA_MODEL_ID`, `OLLAMA_BASE_URL` | Local Ollama when `LLM_PROVIDER=ollama` (default base `http://127.0.0.1:11434`) |
 | `WHISPER_MODEL` | Whisper **size** for local CLI (fallback: `LOCAL_WHISPER_MODEL`, `WHISPERX_MODEL`) |
 | `LOCAL_WHISPER_EXECUTABLE`, `LOCAL_WHISPER_MAX_CHUNK_BYTES` | Local Whisper CLI for interview HTTP STT |
 | `VIDEO_JOB_FRAME_FPS` | Optional fps cap after **`mpdecimate`** for API jobs (default **2**) |

@@ -15,20 +15,7 @@ import {
 const SYSTEM_PROMPT_FILE = "interview-evaluation-system.md";
 const USER_PROMPT_FILE = "interview-evaluation-user.md";
 
-const DEFAULT_LLM_EVAL_TEMPERATURE = 0.4;
 const DEFAULT_AGENT_MAX_ITERATIONS = 24;
-
-function evaluationTemperatureFromEnv(env: NodeJS.ProcessEnv): number {
-  const raw = env.LLM_EVAL_TEMPERATURE?.trim();
-  if (!raw) {
-    return DEFAULT_LLM_EVAL_TEMPERATURE;
-  }
-  const n = Number(raw);
-  if (!Number.isFinite(n)) {
-    return DEFAULT_LLM_EVAL_TEMPERATURE;
-  }
-  return n;
-}
 
 function agentMaxIterationsFromEnv(env: NodeJS.ProcessEnv): number {
   const raw = env.EVALUATION_AGENT_MAX_ITERATIONS?.trim();
@@ -90,8 +77,8 @@ function logCompleteEvaluationInputFromEnv(env: NodeJS.ProcessEnv): boolean {
 
 /**
  * Builds an {@link InterviewEvaluator}. Set **`EVALUATION_PROVIDER`** to **`llm`** (one-shot {@link InterviewEvaluationService})
- * or **`single-agent`** ({@link SingleAgentInterviewEvaluator}). Set **`LLM_PROVIDER`** to **`openai`** | **`anthropic`** | **`gemini`**
- * with the matching API key (shared with {@link LlmClientFactory}, not evaluation-specific).
+ * or **`single-agent`** ({@link SingleAgentInterviewEvaluator}). Set **`LLM_PROVIDER`** to **`openai`** | **`anthropic`** | **`gemini`** | **`ollama`**
+ * with the matching API key (Ollama: no key; set `OLLAMA_MODEL_ID`, optional `OLLAMA_BASE_URL`) — shared with {@link LlmClientFactory}, not evaluation-specific.
  * Throws if env / API keys / database are not configured — the HTTP server should not start.
  * See `agents/single-agent-evaluator/AGENT.md` for the tool-based evaluator contract.
  *
@@ -115,13 +102,13 @@ export class InterviewEvaluationServiceFactory {
     const configured = env.EVALUATION_PROVIDER?.trim();
     if (!configured) {
       throw new Error(
-        'EVALUATION_PROVIDER is required: set evaluationProvider in server/.app-runtime-config.json (or EVALUATION_PROVIDER in the process environment) to "llm" or "single-agent". Set LLM_PROVIDER and the matching API key.',
+        'EVALUATION_PROVIDER is required: set evaluationProvider in server/.app-runtime-config.json (or EVALUATION_PROVIDER in the process environment) to "llm" or "single-agent". Set LLM_PROVIDER and the matching credentials (Ollama: OLLAMA_MODEL_ID; cloud: API key + model id).',
       );
     }
     const raw = configured.toLowerCase();
     if (raw !== "llm" && raw !== "single-agent") {
       throw new Error(
-        `Unsupported EVALUATION_PROVIDER "${raw}". Use exactly "llm" or "single-agent" with LLM_PROVIDER=openai|anthropic|gemini.`,
+        `Unsupported EVALUATION_PROVIDER "${raw}". Use exactly "llm" or "single-agent" with LLM_PROVIDER=openai|anthropic|gemini|ollama.`,
       );
     }
 
@@ -131,7 +118,6 @@ export class InterviewEvaluationServiceFactory {
       provider: llm.getProviderId(),
       loadPrompts,
       promptLog,
-      evaluationTemperature: evaluationTemperatureFromEnv(env),
       logAgentToolSteps: logAgentToolStepsFromEnv(env),
       logCompleteEvaluationInput: logCompleteEvaluationInputFromEnv(env),
       agentToolObservationMaxChars: agentToolObservationMaxCharsFromEnv(env),

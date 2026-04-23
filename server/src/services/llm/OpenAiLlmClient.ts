@@ -10,6 +10,8 @@ import {
   tryCreateOpenAiClient,
 } from "./openAiClient.js";
 
+const JSON_CHAT_TEMPERATURE = 0.4;
+
 export class OpenAiLlmClient implements LlmClient {
   getProviderId(): string {
     return "openai";
@@ -30,10 +32,10 @@ export class OpenAiLlmClient implements LlmClient {
     return this.modelId;
   }
 
-  toBaseChatModel(temperature: number): BaseChatModel {
+  toBaseChatModel(): BaseChatModel {
     return new ChatOpenAI({
       model: this.modelId,
-      temperature,
+      temperature: JSON_CHAT_TEMPERATURE,
       apiKey: this.apiKey,
     });
   }
@@ -81,7 +83,7 @@ export class OpenAiLlmClient implements LlmClient {
         { role: "system", content: params.system },
         { role: "user", content: params.user },
       ],
-      temperature: params.temperature ?? 0.4,
+      temperature: JSON_CHAT_TEMPERATURE,
     });
     const text = completion.choices[0]?.message?.content ?? "";
     return { text, usage: OpenAiLlmClient.extractUsage(completion.usage) };
@@ -107,7 +109,7 @@ export class OpenAiLlmClient implements LlmClient {
           ],
         },
       ],
-      temperature: params.temperature ?? 0.4,
+      temperature: JSON_CHAT_TEMPERATURE,
     });
     const text = completion.choices[0]?.message?.content ?? "";
     return { text, usage: OpenAiLlmClient.extractUsage(completion.usage) };

@@ -9,6 +9,37 @@ type AnthropicMessageResponse = {
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 
+const ANTHROPIC_JSON_TEMPERATURE = 0.2;
+
+/** LangChain defaults `topP`/`topK` to -1; merge this into `messages.create` to omit them. */
+const STRIP_DEFAULT_TOP_P_TOP_K = {
+  top_p: undefined,
+  top_k: undefined,
+};
+
+/**
+ * Longer prefixes first. `null` = omit `temperature` on the REST body / LangChain. Otherwise same as
+ * {@link ANTHROPIC_JSON_TEMPERATURE}.
+ */
+const ANTHROPIC_TEMPERATURE_BY_PREFIX: ReadonlyArray<{
+  prefix: string;
+  temperature: number | null;
+}> = [
+  { prefix: "claude-sonnet-4-", temperature: null },
+  { prefix: "claude-opus-4-", temperature: null },
+  { prefix: "claude-4-", temperature: null },
+];
+
+function temperatureForAnthropicModelId(modelId: string): number | null {
+  const m = modelId.trim().toLowerCase();
+  for (const r of ANTHROPIC_TEMPERATURE_BY_PREFIX) {
+    if (m.startsWith(r.prefix)) {
+      return r.temperature;
+    }
+  }
+  return ANTHROPIC_JSON_TEMPERATURE;
+}
+
 /**
  * Anthropic Messages API via `fetch` (no extra dependency). Responses must be JSON-only (enforced in system prompt).
  */
@@ -26,11 +57,12 @@ export class AnthropicLlmClient implements LlmClient {
     return this.modelId;
   }
 
-  toBaseChatModel(temperature: number): BaseChatModel {
+  toBaseChatModel(): BaseChatModel {
     return new ChatAnthropic({
       model: this.modelId,
-      temperature,
       anthropicApiKey: this.apiKey,
+      temperature: temperatureForAnthropicModelId(this.modelId),
+      invocationKwargs: STRIP_DEFAULT_TOP_P_TOP_K,
     });
   }
 
@@ -54,7 +86,15 @@ export class AnthropicLlmClient implements LlmClient {
   }
 
   async completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult> {
+    const t = temperatureForAnthropicModelId(this.modelId);
     const system = `${params.system}\n\nYou must respond with a single valid JSON object only — no markdown fences, no explanation outside the JSON.`;
+    const body = {
+      model: this.modelId,
+      max_tokens: params.maxOutputTokens ?? 8192,
+      system,
+      messages: [{ role: "user", content: params.user }],
+      ...(t === null ? {} : { temperature: t }),
+    };
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -62,13 +102,7 @@ export class AnthropicLlmClient implements LlmClient {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model: this.modelId,
-        max_tokens: params.maxOutputTokens ?? 8192,
-        system,
-        messages: [{ role: "user", content: params.user }],
-        temperature: params.temperature ?? 0.4,
-      }),
+      body: JSON.stringify(body),
     });
 
     const raw = await res.text();
@@ -91,6 +125,29 @@ export class AnthropicLlmClient implements LlmClient {
     const imageBytes = await fsPromises.readFile(params.imagePngPath);
     const system = `${params.system}\n\nYou must respond with a single valid JSON object only — no markdown fences, no explanation outside the JSON.`;
     const model = params.modelId ?? this.modelId;
+    const t = temperatureForAnthropicModelId(model);
+    const visionBody = {
+      model,
+      max_tokens: params.maxTokens ?? 4096,
+      system,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: params.userText },
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: imageBytes.toString("base64"),
+              },
+            },
+          ],
+        },
+      ],
+      ...(t === null ? {} : { temperature: t }),
+    };
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -98,28 +155,7 @@ export class AnthropicLlmClient implements LlmClient {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: params.maxTokens ?? 4096,
-        system,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: params.userText },
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: "image/png",
-                  data: imageBytes.toString("base64"),
-                },
-              },
-            ],
-          },
-        ],
-        temperature: params.temperature ?? 0.4,
-      }),
+      body: JSON.stringify(visionBody),
     });
 
     const raw = await res.text();

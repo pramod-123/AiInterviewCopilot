@@ -29,6 +29,10 @@ export type AppRuntimeConfigV1 = {
   openaiModelId?: string;
   anthropicModelId?: string;
   geminiModelId?: string;
+  /** Local Ollama model name; merged as `OLLAMA_MODEL_ID` when set. */
+  ollamaModelId?: string;
+  /** Ollama server base URL (e.g. `http://127.0.0.1:11434`); merged as `OLLAMA_BASE_URL` when set. */
+  ollamaBaseUrl?: string;
   /** Preset evaluation LLM ids for OpenAI (shown in UI datalist); max {@link EVAL_MODEL_OPTION_MAX} entries. */
   openaiEvalModelOptions?: string[];
   anthropicEvalModelOptions?: string[];
@@ -69,6 +73,8 @@ export type AppRuntimeConfigPublicV1 = {
   openaiModelId: string;
   anthropicModelId: string;
   geminiModelId: string;
+  ollamaModelId: string;
+  ollamaBaseUrl: string;
   openaiEvalModelOptions: string[];
   anthropicEvalModelOptions: string[];
   geminiEvalModelOptions: string[];
@@ -106,6 +112,8 @@ const STRING_PATCH_KEYS = new Set([
   "openaiModelId",
   "anthropicModelId",
   "geminiModelId",
+  "ollamaModelId",
+  "ollamaBaseUrl",
   "whisperModel",
   "evaluationProvider",
   "localWhisperExecutable",
@@ -232,6 +240,8 @@ export function toPublicRuntimeConfig(
     openaiModelId: (c.openaiModelId ?? "").trim(),
     anthropicModelId: (c.anthropicModelId ?? "").trim(),
     geminiModelId: (c.geminiModelId ?? "").trim(),
+    ollamaModelId: (c.ollamaModelId ?? "").trim(),
+    ollamaBaseUrl: (c.ollamaBaseUrl ?? "").trim(),
     openaiEvalModelOptions: sanitizeEvalModelOptionList(c.openaiEvalModelOptions, openaiEvalFb),
     anthropicEvalModelOptions: sanitizeEvalModelOptionList(c.anthropicEvalModelOptions, anthropicEvalFb),
     geminiEvalModelOptions: sanitizeEvalModelOptionList(c.geminiEvalModelOptions, geminiEvalFb),
@@ -363,6 +373,8 @@ export function getMergedAppEnv(paths: AppPaths): NodeJS.ProcessEnv {
       set("OPENAI_MODEL_ID", file.openaiModelId);
       set("ANTHROPIC_MODEL_ID", file.anthropicModelId);
       set("GEMINI_MODEL_ID", file.geminiModelId);
+      set("OLLAMA_MODEL_ID", file.ollamaModelId);
+      set("OLLAMA_BASE_URL", file.ollamaBaseUrl);
       set("WHISPER_MODEL", file.whisperModel);
       set("EVALUATION_PROVIDER", file.evaluationProvider);
       set("LOCAL_WHISPER_EXECUTABLE", file.localWhisperExecutable);

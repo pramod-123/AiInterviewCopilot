@@ -29,7 +29,6 @@ export class LlmClientSrtGenerator implements ISrtGenerator {
     let labels: LabelReply["labels"];
     try {
       const response = await this.llm.completeJsonChat({
-        temperature: 0.2,
         maxOutputTokens: 4000,
         system:
           'Output only JSON: {"labels":[{"i":number,"speakerLabel":"INTERVIEWER"|"INTERVIEWEE"}]}. Label technical interview transcript segments.',

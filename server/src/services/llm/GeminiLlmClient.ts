@@ -5,12 +5,28 @@ import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import type { SpeechTranscription } from "../../types/speechTranscription.js";
 import type { LlmClient, LlmCompletionResult, LlmJsonChatParams, LlmTokenUsage, LlmVisionJsonChatParams } from "./LlmClient.js";
 
+const JSON_CHAT_TEMPERATURE = 0.4;
+
+/**
+ * Reject model ids that only exist for Live / native-audio (not `generateContent` / tool-calling).
+ */
+function assertGeminiModelIdSupportsTextGenerateContent(modelId: string): void {
+  const m = modelId.toLowerCase();
+  if (m.includes("native-audio")) {
+    throw new Error(
+      `GEMINI_MODEL_ID "${modelId}" is a native-audio / Live preview model and is not available for text generateContent (interview evaluation, tool-calling). ` +
+        `Set GEMINI_MODEL_ID to a text model, for example: gemini-2.0-flash, gemini-2.5-flash, or gemini-2.5-pro. ` +
+        `Use native-audio / Live model ids only for Gemini Live (e.g. geminiLiveModel in .app-runtime-config.json), not for GEMINI_MODEL_ID.`,
+    );
+  }
+}
+
 /**
  * Gemini API via `@google/genai` ({@link GoogleGenAI.models.generateContent}) for JSON chat and vision.
  * Tool agents use {@link ChatGoogleGenerativeAI} from `@langchain/google-genai` (legacy `@google/generative-ai` stack).
  *
- * Env: **`GEMINI_API_KEY`**, **`GEMINI_MODEL_ID`** (e.g. `gemini-2.0-flash`), **`LLM_PROVIDER=gemini`**.
- * Audio STT for `transcribeFromAudioFile` is not supported here — transcription uses the **local Whisper CLI**, not Gemini.
+ * Env: **`GEMINI_API_KEY`**, **`GEMINI_MODEL_ID`** — use a **text** model (e.g. `gemini-2.0-flash`), not Live / `native-audio` previews.
+ * **`LLM_PROVIDER=gemini`**. Audio STT for `transcribeFromAudioFile` is not supported here — use the local Whisper CLI.
  */
 export class GeminiLlmClient implements LlmClient {
   getProviderId(): string {
@@ -28,10 +44,10 @@ export class GeminiLlmClient implements LlmClient {
     return this.modelId;
   }
 
-  toBaseChatModel(temperature: number): BaseChatModel {
+  toBaseChatModel(): BaseChatModel {
     return new ChatGoogleGenerativeAI({
       model: this.modelId,
-      temperature,
+      temperature: JSON_CHAT_TEMPERATURE,
       apiKey: this.apiKey,
     });
   }
@@ -45,6 +61,7 @@ export class GeminiLlmClient implements LlmClient {
     if (!modelId) {
       return null;
     }
+    assertGeminiModelIdSupportsTextGenerateContent(modelId);
     const ai = new GoogleGenAI({ apiKey: key });
     return new GeminiLlmClient(ai, modelId, key);
   }
@@ -74,14 +91,14 @@ export class GeminiLlmClient implements LlmClient {
   }
 
   async completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult> {
-    const system = params.system
+    const system = params.system;
     const response = await this.ai.models.generateContent({
       model: this.modelId,
       contents: params.user,
       config: {
         systemInstruction: system,
         responseMimeType: "application/json",
-        temperature: params.temperature ?? 0.4,
+        temperature: JSON_CHAT_TEMPERATURE,
         maxOutputTokens: params.maxOutputTokens,
       },
     });
@@ -105,7 +122,7 @@ export class GeminiLlmClient implements LlmClient {
       config: {
         systemInstruction: system,
         responseMimeType: "application/json",
-        temperature: params.temperature ?? 0.4,
+        temperature: JSON_CHAT_TEMPERATURE,
         maxOutputTokens: params.maxTokens,
       },
     });

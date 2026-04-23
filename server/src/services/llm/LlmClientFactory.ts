@@ -1,18 +1,19 @@
 import { AnthropicLlmClient } from "./AnthropicLlmClient.js";
 import { GeminiLlmClient } from "./GeminiLlmClient.js";
 import type { LlmClient } from "./LlmClient.js";
+import { OllamaLlmClient } from "./OllamaLlmClient.js";
 import { OpenAiLlmClient } from "./OpenAiLlmClient.js";
 
 /**
  * Instantiates {@link LlmClient} from env. Backend is **`LLM_PROVIDER`**
- * (`openai` | `anthropic` | `gemini`) with matching API key.
+ * (`openai` | `anthropic` | `gemini` | `ollama`) with matching API key (not required for Ollama).
  */
 export class LlmClientFactory {
   static create(env: NodeJS.ProcessEnv = process.env): LlmClient {
     const configured = env.LLM_PROVIDER?.trim();
     if (!configured) {
       throw new Error(
-        'LLM_PROVIDER is required: set llmProvider in server/.app-runtime-config.json (or LLM_PROVIDER in the process environment) to "openai", "anthropic", or "gemini" with the matching API key.',
+        'LLM_PROVIDER is required: set llmProvider in server/.app-runtime-config.json (or LLM_PROVIDER in the process environment) to "openai", "anthropic", "gemini", or "ollama" with the matching API key (Ollama: no key; set OLLAMA_MODEL_ID).',
       );
     }
     const raw = configured.toLowerCase();
@@ -55,6 +56,18 @@ export class LlmClientFactory {
       }
       return client;
     }
-    throw new Error(`Unsupported LLM_PROVIDER "${raw}". Use exactly "openai", "anthropic", or "gemini".`);
+    if (raw === "ollama") {
+      const client = OllamaLlmClient.tryCreate(env);
+      if (!client) {
+        if (!env.OLLAMA_MODEL_ID?.trim()) {
+          throw new Error("OLLAMA_MODEL_ID is not set but LLM_PROVIDER=ollama.");
+        }
+        throw new Error("Could not create Ollama LLM client.");
+      }
+      return client;
+    }
+    throw new Error(
+      `Unsupported LLM_PROVIDER "${raw}". Use exactly "openai", "anthropic", "gemini", or "ollama".`,
+    );
   }
 }

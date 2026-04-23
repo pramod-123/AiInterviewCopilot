@@ -44,8 +44,6 @@ export type InterviewEvaluationServiceConfig = {
    * Set to `Infinity` (via `EVALUATION_LOG_FULL_TOOL_OBSERVATIONS` in the factory) to log full observations on screen / in JSON logs.
    */
   agentToolObservationMaxChars?: number;
-  /** Sampling temperature for the rubric evaluation chat call (typical range 0–2). */
-  evaluationTemperature: number;
 };
 
 /** Plain snapshot of evaluation input for structured logging (no transformation). */
@@ -178,7 +176,6 @@ export class InterviewEvaluationService implements InterviewEvaluator {
     const { text, usage } = await this.llm.completeJsonChat({
       system: systemPrompt,
       user: userContent,
-      temperature: this.config.evaluationTemperature,
     });
 
     const modelId = this.llm.getModelId();

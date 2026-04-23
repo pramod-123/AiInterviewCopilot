@@ -8,7 +8,7 @@
  *   npx tsx scripts/compare-evaluators.ts <jobId | liveSessionId> [output.json]
  *   npx tsx scripts/compare-evaluators.ts --session <liveSessionId> [output.json]
  *
- * Uses `LLM_PROVIDER`, API keys, `LLM_EVAL_TEMPERATURE`, `EVALUATION_AGENT_MAX_ITERATIONS` like the app.
+ * Uses `LLM_PROVIDER`, API keys, `EVALUATION_AGENT_MAX_ITERATIONS` like the app.
  * Logging flags are off here to keep stdout quiet; results go to the file (and a one-line path on stderr).
  */
 import "dotenv/config";
@@ -25,15 +25,7 @@ import { SingleAgentInterviewEvaluator } from "../src/services/evaluation/Single
 const SYSTEM_PROMPT_FILE = "interview-evaluation-system.md";
 const USER_PROMPT_FILE = "interview-evaluation-user.md";
 
-const DEFAULT_LLM_EVAL_TEMPERATURE = 0.4;
 const DEFAULT_AGENT_MAX_ITERATIONS = 24;
-
-function evalTemperatureFromEnv(): number {
-  const raw = process.env.LLM_EVAL_TEMPERATURE?.trim();
-  if (!raw) return DEFAULT_LLM_EVAL_TEMPERATURE;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : DEFAULT_LLM_EVAL_TEMPERATURE;
-}
 
 function agentMaxIterationsFromEnv(): number {
   const raw = process.env.EVALUATION_AGENT_MAX_ITERATIONS?.trim();
@@ -178,7 +170,6 @@ async function main(): Promise<void> {
   const baseConfig = {
     provider: llm.getProviderId(),
     loadPrompts,
-    evaluationTemperature: evalTemperatureFromEnv(),
     logAgentToolSteps: false,
     logCompleteEvaluationInput: false,
   };

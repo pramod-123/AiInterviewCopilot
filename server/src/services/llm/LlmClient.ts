@@ -24,7 +24,6 @@ export type LlmCompletionResult = {
 export type LlmJsonChatParams = {
   system: string;
   user: string;
-  temperature?: number;
   /** Cap on completion tokens (evaluation JSON can be long). */
   maxOutputTokens?: number;
 };
@@ -35,7 +34,6 @@ export type LlmVisionJsonChatParams = {
   userText: string;
   /** Local PNG path (read by the client implementation). */
   imagePngPath: string;
-  temperature?: number;
   maxTokens?: number;
   /** Override the chat model for this call (optional). */
   modelId?: string;
@@ -50,8 +48,9 @@ export interface LlmClient {
 
   /**
    * LangChain {@link BaseChatModel} for tool-calling agents and other Runnables (same underlying model as {@link getModelId}).
+   * Sampling temperature is fixed in each {@link LlmClient} implementation (not configured from callers).
    */
-  toBaseChatModel(temperature: number): BaseChatModel;
+  toBaseChatModel(): BaseChatModel;
 
   /** Ask for a single JSON object (providers differ; callers parse with {@link parseInterviewEvaluationJson}). */
   completeJsonChat(params: LlmJsonChatParams): Promise<LlmCompletionResult>;

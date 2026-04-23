@@ -1,7 +1,8 @@
 /**
  * Smoke-test {@link SingleAgentInterviewEvaluator} with a real DB job + LLM (no HTTP server).
  *
- * Prereqs: `.env` with `EVALUATION_PROVIDER=single-agent`, `LLM_PROVIDER=openai|anthropic`, and matching API key.
+ * Prereqs: `.env` with `LLM_PROVIDER=openai|anthropic|gemini|ollama` and matching API key (Ollama: no key; see `LlmClientFactory`).
+ * To run **all three** providers in one go (real API): `npm run test:single-agent-evaluator:providers`.
  * This script always uses the single-agent evaluator.
  * Tool-call trace (model thought + tool + observation preview) is always enabled (`logAgentToolSteps`).
  * Full LLM input logging (`logCompleteEvaluationInput`) is always enabled; the agent user turn is ids-only (transcript/problem/code via tools).
@@ -167,14 +168,6 @@ async function main(): Promise<void> {
     const utteranceCountDb = await appDao.countSpeechUtterancesForJob(jobId);
 
     const loader = new PromptLoader();
-    const evalTemperature = (() => {
-      const raw = process.env.LLM_EVAL_TEMPERATURE?.trim();
-      if (!raw) {
-        return 0.4;
-      }
-      const n = Number(raw);
-      return Number.isFinite(n) ? n : 0.4;
-    })();
 
     const evaluator = new SingleAgentInterviewEvaluator(llm, appDao, {
       provider: llm.getProviderId(),
@@ -182,7 +175,6 @@ async function main(): Promise<void> {
         systemPrompt: loader.loadSync(SYSTEM_PROMPT_FILE),
         userPromptTemplate: loader.loadSync(USER_PROMPT_FILE),
       }),
-      evaluationTemperature: evalTemperature,
       logAgentToolSteps: true,
       logCompleteEvaluationInput: true,
     }, iterationsFromEnv());

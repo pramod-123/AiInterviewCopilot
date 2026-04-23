@@ -164,7 +164,7 @@ export class SingleAgentInterviewEvaluator implements InterviewEvaluator {
       this.logPrompts(jobId, this.systemPrompt, userContent, liveSessionId);
     }
 
-    const chatModel = this.llm.toBaseChatModel(this.config.evaluationTemperature);
+    const chatModel = this.llm.toBaseChatModel();
     const tools = this.createTools({
       db: this.appDb,
       liveSessionId,
@@ -190,6 +190,7 @@ export class SingleAgentInterviewEvaluator implements InterviewEvaluator {
       tools,
       maxIterations: this.maxAgentIterations,
       returnIntermediateSteps: traceSteps,
+      earlyStoppingMethod: "generate",
     });
 
     let output: string;

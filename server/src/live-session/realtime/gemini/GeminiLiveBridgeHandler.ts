@@ -301,7 +301,7 @@ export class GeminiLiveBridgeHandler extends LiveRealtimeBridgeHandler {
     if (t.startsWith(prev)) {
       return t;
     }
-    const joiner = /^[,.;:!?)}\]]/.test(t) ? "" : " ";
+    const joiner = "";
     return `${prev}${joiner}${t}`.trim();
   }
 

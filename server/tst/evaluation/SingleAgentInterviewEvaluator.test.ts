@@ -38,10 +38,12 @@ const minimalEvalJson = JSON.stringify({
   weaknesses: [],
 });
 
-function mockLlm(): LlmClient {
+function mockLlm(overrides?: { providerId?: string; modelId?: string }): LlmClient {
+  const providerId = overrides?.providerId ?? "openai";
+  const modelId = overrides?.modelId ?? "gpt-test";
   return {
-    getProviderId: () => "openai",
-    getModelId: () => "gpt-test",
+    getProviderId: () => providerId,
+    getModelId: () => modelId,
     toBaseChatModel: vi.fn((): BaseChatModel => ({}) as BaseChatModel),
     completeJsonChat: vi.fn(),
     completeVisionJsonChat: vi.fn(),
@@ -49,14 +51,13 @@ function mockLlm(): LlmClient {
   };
 }
 
-function baseConfig(): InterviewEvaluationServiceConfig {
+function baseConfig(overrides?: { provider: string }): InterviewEvaluationServiceConfig {
   return {
-    provider: "openai",
+    provider: overrides?.provider ?? "openai",
     loadPrompts: () => ({
       systemPrompt: "You are an evaluator. Output JSON.",
       userPromptTemplate: "{{JOB_ID}}",
     }),
-    evaluationTemperature: 0.2,
   };
 }
 
@@ -69,8 +70,9 @@ function appDbWithLiveSession(): IAppDao {
 
 /**
  * Unit tests: construct {@link SingleAgentInterviewEvaluator} and call `evaluate()` with mocks.
- * For a **real** instance against the DB + API: `npm run test:single-agent-evaluator -- <jobId>`
- * (see `scripts/test-single-agent-evaluator.ts`).
+ * For a **real** run against the DB + LLM APIs, use
+ * `npm run test:single-agent-evaluator` (one `LLM_PROVIDER` from `.env`) or
+ * `npm run test:single-agent-evaluator:providers` (openai, anthropic, gemini, ollama in sequence, keys permitting).
  */
 describe("formatAgentStepsTrace", () => {
   it("maps tool, toolInput, agentThought from action.log, and truncates long observations", () => {
