@@ -1641,7 +1641,7 @@ async function init() {
     });
   }
   btnSpSettingsReload?.addEventListener("click", () => {
-    void spServerConfigCtl?.reload();
+    void spServerConfigCtl?.reload({ announceReload: true });
   });
   btnSpSettingsClose?.addEventListener("click", () => {
     setSpServerSettingsOpen(false);

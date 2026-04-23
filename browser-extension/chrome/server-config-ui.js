@@ -97,6 +97,63 @@
 
   var STATUS_HTML = '<p data-ic="status" class="ac-status"></p>';
 
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  var icConfigToastHideTimer = null;
+  /** @type {HTMLElement | null} */
+  var icConfigToastEl = null;
+
+  function removeIcConfigToastNow() {
+    if (icConfigToastHideTimer) {
+      clearTimeout(icConfigToastHideTimer);
+      icConfigToastHideTimer = null;
+    }
+    if (icConfigToastEl && icConfigToastEl.parentNode) {
+      icConfigToastEl.parentNode.removeChild(icConfigToastEl);
+    }
+    icConfigToastEl = null;
+  }
+
+  /**
+   * Fixed top-right toast (under extension headers); parent is `documentElement` so layout
+   * (e.g. `overflow: hidden` shells) does not clip or pin it to the Save footer.
+   * @param {string} message
+   * @param {number} [visibleMs]
+   */
+  function showIcConfigToast(message, visibleMs) {
+    removeIcConfigToastNow();
+    var el = document.createElement("div");
+    el.className = "ic-config-toast";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.textContent = message;
+    document.documentElement.appendChild(el);
+    icConfigToastEl = el;
+    var ms = typeof visibleMs === "number" && visibleMs > 0 ? visibleMs : 4200;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (icConfigToastEl === el) {
+          el.classList.add("ic-config-toast--visible");
+        }
+      });
+    });
+    icConfigToastHideTimer = setTimeout(function () {
+      icConfigToastHideTimer = null;
+      if (icConfigToastEl !== el) {
+        return;
+      }
+      el.classList.remove("ic-config-toast--visible");
+      el.classList.add("ic-config-toast--leave");
+      setTimeout(function () {
+        if (el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+        if (icConfigToastEl === el) {
+          icConfigToastEl = null;
+        }
+      }, 240);
+    }, ms);
+  }
+
   /**
    * @param {HTMLElement} root
    * @param {string} name
@@ -191,7 +248,7 @@
 
   /**
    * @param {IcMountServerConfigOpts} opts
-   * @returns {{ reload: () => Promise<void> }}
+   * @returns {{ reload: (opts?: { announceReload?: boolean }) => Promise<void>; syncFromParent: () => void }}
    */
   function mountServerConfigUI(opts) {
     var mountPoint = opts.mountPoint;
@@ -360,12 +417,23 @@
       }
     }
 
-    function setStatus(text, isError) {
+    /**
+     * @param {string} text
+     * @param {boolean} isError
+     * @param {"success" | undefined} [tone]
+     */
+    function setStatus(text, isError, tone) {
       if (!cfgStatus) {
         return;
       }
       cfgStatus.textContent = text;
-      cfgStatus.className = isError ? "ac-status err" : "ac-status";
+      if (isError) {
+        cfgStatus.className = "ac-status err";
+      } else if (tone === "success") {
+        cfgStatus.className = "ac-status ok";
+      } else {
+        cfgStatus.className = "ac-status";
+      }
     }
 
     function apiBase() {
@@ -480,7 +548,11 @@
       fillModelSelect(whisperModel, lastLoaded.whisperModelOptions, lastLoaded.whisperModel);
     }
 
-    async function loadConfig() {
+    /**
+     * @param {boolean} [fromSuccessfulSave] when true, end state reads as explicit save confirmation
+     * @param {{ announceReload?: boolean }} [loadOpts] user tapped Reload — show a short toast away from the Save footer
+     */
+    async function loadConfig(fromSuccessfulSave, loadOpts) {
       setStatus("Loading…", false);
       try {
         syncApiInputFromParent();
@@ -504,7 +576,15 @@
           return;
         }
         applyPublicConfig(data);
-        setStatus("Loaded.", false);
+        if (fromSuccessfulSave) {
+          setStatus("Configuration saved.", false, "success");
+          showIcConfigToast("Configuration saved.");
+        } else if (loadOpts && loadOpts.announceReload) {
+          setStatus("Loaded.", false);
+          showIcConfigToast("Reloaded from server.");
+        } else {
+          setStatus("Loaded.", false);
+        }
       } catch (e) {
         var msg =
           e && typeof e === "object" && "message" in e && typeof e.message === "string"
@@ -614,7 +694,8 @@
         }
 
         if (Object.keys(patch).length === 0) {
-          setStatus("Nothing to save.", false);
+          setStatus("Nothing to save — values already match the server.", false, "success");
+          showIcConfigToast("Nothing to save — already matches the server.");
           return;
         }
 
@@ -641,8 +722,7 @@
           setStatus(err2, true);
           return;
         }
-        setStatus("Saved. Refreshing…", false);
-        await loadConfig();
+        await loadConfig(true);
         var afterSave = elAny.__icOnAfterSuccessfulSave;
         if (typeof afterSave === "function") {
           void Promise.resolve(afterSave());
@@ -676,6 +756,24 @@
         btnSave.addEventListener("click", function () {
           void saveConfig();
         });
+      document.addEventListener(
+        "keydown",
+        function icSrvCmdSave(ev) {
+          if (ev.defaultPrevented) {
+            return;
+          }
+          if (!(ev.ctrlKey || ev.metaKey) || (ev.key !== "s" && ev.key !== "S")) {
+            return;
+          }
+          var t = ev.target;
+          if (!(t instanceof HTMLElement) || !mountPoint.contains(t)) {
+            return;
+          }
+          ev.preventDefault();
+          void saveConfig();
+        },
+        true,
+      );
       [openaiApiKey, geminiApiKey, anthropicApiKey].forEach(function (inp) {
         if (inp) {
           inp.addEventListener("input", function () {
@@ -711,7 +809,9 @@
     }
 
     var ctl = {
-      reload: loadConfig,
+      reload: function (reloadOpts) {
+        return loadConfig(false, reloadOpts);
+      },
       syncFromParent: syncApiInputFromParent,
     };
     elAny.__icSrvCtl = ctl;

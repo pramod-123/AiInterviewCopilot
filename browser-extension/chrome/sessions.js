@@ -1,7 +1,6 @@
 const DEFAULT_API = "http://127.0.0.1:3001";
 
 const apiBaseInput = document.getElementById("apiBase");
-const btnNewInterview = document.getElementById("btnNewInterview");
 const sessSidebarBulk = document.getElementById("sessSidebarBulk");
 const btnBulkDeleteSessions = document.getElementById("btnBulkDeleteSessions");
 const bulkDeleteLabel = document.getElementById("bulkDeleteLabel");
@@ -1748,34 +1747,6 @@ apiBaseInput?.addEventListener("change", () => {
   void syncInterviewApiBanner();
 });
 
-btnNewInterview?.addEventListener("click", () => {
-  void (async () => {
-    setListStatus("Opening LeetCode side panel for a new interview…", false);
-    try {
-      await saveApiBase();
-      const res = await chrome.runtime.sendMessage({
-        type: "IC_PREPARE_NEW_INTERVIEW_ON_LEETCODE",
-        apiBase: apiBase(),
-      });
-      if (!res?.ok) {
-        setListStatus(
-          res?.reason === "no_leetcode_tab"
-            ? "No LeetCode tab found. Open a problem tab in Chrome, then click New interview again."
-            : `Could not open side panel: ${res?.reason || "unknown error"}.`,
-          true,
-        );
-        return;
-      }
-      setListStatus(
-        "Side panel opened on your LeetCode tab — use Start interview when you are ready (toolbar popup is optional).",
-        false,
-      );
-    } catch (e) {
-      setListStatus(e instanceof Error ? e.message : String(e), true);
-    }
-  })();
-});
-
 btnSidebarToggle?.addEventListener("click", () => {
   if (!sessSidebar) {
     return;
@@ -1917,7 +1888,7 @@ const btnSessSettingsReload = document.getElementById("btnSessSettingsReload");
 const btnSessSettingsClose = document.getElementById("btnSessSettingsClose");
 const sessServerConfigRoot = document.getElementById("sessServerConfigRoot");
 
-/** @type {{ reload: () => Promise<void>; syncFromParent: () => void } | null} */
+/** @type {{ reload: (opts?: { announceReload?: boolean }) => Promise<void>; syncFromParent: () => void } | null} */
 let sessServerConfigCtl = null;
 
 function setSessSettingsDrawerOpen(open) {
@@ -1969,7 +1940,7 @@ btnSessSettings?.addEventListener("click", () => {
 });
 
 btnSessSettingsReload?.addEventListener("click", () => {
-  void sessServerConfigCtl?.reload();
+  void sessServerConfigCtl?.reload({ announceReload: true });
 });
 
 btnSessSettingsClose?.addEventListener("click", () => {
