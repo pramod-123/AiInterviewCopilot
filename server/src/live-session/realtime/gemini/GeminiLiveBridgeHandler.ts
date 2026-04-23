@@ -291,18 +291,17 @@ export class GeminiLiveBridgeHandler extends LiveRealtimeBridgeHandler {
   }
 
   private mergeTranscriptionDelta(prev: string, token: string): string {
-    const t = token.trim();
+    const t = token;
     if (!t) {
       return prev;
     }
-    if (!prev.trim()) {
+    if (!prev) {
       return t;
     }
     if (t.startsWith(prev)) {
       return t;
     }
-    const joiner = "";
-    return `${prev}${joiner}${t}`.trim();
+    return `${prev}${t}`;
   }
 
   private ingestInputTranscription(text: string, wallMs: number): void {
