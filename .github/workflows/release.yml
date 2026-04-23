@@ -52,6 +52,8 @@ jobs:
           # macos-13 was removed from GitHub-hosted runners; use Intel image for darwin-x64 tarball.
           - os: macos-15-intel
             asset_suffix: darwin-x64
+          - os: windows-latest
+            asset_suffix: win-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -71,7 +73,8 @@ jobs:
           PRISMA_VER="$(node -p "require('./package-lock.json').packages['node_modules/prisma'].version")"
           npm install "prisma@${PRISMA_VER}" --omit=dev --no-save
 
-      - name: Pack tarball
+      - name: Pack tarball (macOS / Linux)
+        if: runner.os != 'Windows'
         run: |
           mkdir -p icons
           cp "${GITHUB_WORKSPACE}/browser-extension/chrome/icons/icon-512.png" icons/icon-512.png
@@ -87,6 +90,22 @@ jobs:
           else
             shasum -a 256 "../${ASSET}" | awk '{print $1}' > "../${ASSET}.sha256"
           fi
+
+      - name: Pack tarball (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path icons | Out-Null
+          Copy-Item "${env:GITHUB_WORKSPACE}/browser-extension/chrome/icons/icon-512.png" -Destination "icons/icon-512.png"
+          $asset = "ai-interview-copilot-server-${{ matrix.asset_suffix }}.tar.gz"
+          $paths = @(
+            "dist", "node_modules", "package.json", "package-lock.json",
+            "prisma", "prisma.config.ts", ".env.example",
+            ".app-runtime-config.example.json", ".app-runtime-config.defaults.json",
+            "prompts", "agents", "icons/icon-512.png"
+          )
+          tar -czf "../$asset" @paths
+          (Get-FileHash "../$asset" -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -NoNewline "../${asset}.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

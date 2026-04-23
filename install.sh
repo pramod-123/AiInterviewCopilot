@@ -5,6 +5,9 @@
 #
 # One-liner (public GitHub API):
 #   curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh | bash
+# Windows (PowerShell 5.1+): download install.ps1 from the repo raw URL, then:
+#   powershell -ExecutionPolicy Bypass -File .\install.ps1
+# Git Bash on Windows can run this script too (winget deps, win-x64 tarball).
 # Same install, stdin stays your terminal (y/n prompts for zsh snippet, extension download, etc.):
 #   bash -c "$(curl -fsSL https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.sh)"
 # Fully unattended (CI / no TTY): auto-yes; optional API keys only from env when INSTALL_CONSUMER_YES=1.
@@ -333,6 +336,13 @@ EOS
 # Platform
 # ---------------------------------------------------------------------------
 
+host_is_windows_gitbash() {
+  case "$(uname -s)" in
+    MINGW64* | MINGW32* | MSYS* | CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 detect_asset_suffix() {
   local os arch
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -354,8 +364,15 @@ detect_asset_suffix() {
       printf '%s' "linux-x64"
       ;;
     darwin) printf '%s' "darwin-${arch}" ;;
+    mingw* | msys* | cygwin*)
+      if [[ "${arch}" != x64 ]]; then
+        echo "Prebuilt server is only available for win-x64 (found win-${arch})." >&2
+        exit 1
+      fi
+      printf '%s' "win-x64"
+      ;;
     *)
-      echo "Unsupported OS: $(uname -s)" >&2
+      echo "Unsupported OS: $(uname -s) — use PowerShell: install.ps1, or WSL/Linux/macOS with install.sh" >&2
       exit 1
       ;;
   esac
@@ -493,6 +510,22 @@ install_deps_macos() {
   hash -r 2>/dev/null || true
 }
 
+# Git Bash / MSYS: use winget (Windows Package Manager).
+install_deps_windows_gitbash() {
+  if ! command -v winget >/dev/null 2>&1; then
+    say "winget not found. Install dependencies manually or run install.ps1 in PowerShell."
+    say "Need: Node.js ${NODE_MIN_MAJOR}+, ffmpeg, ffprobe, Python 3, jq, tar (Windows 10+), unzip (optional for extension)."
+    return 1
+  fi
+  say "Installing dependencies via winget (silent; may require elevation once)…"
+  winget install -e --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements --silent || true
+  winget install -e --id Gyan.FFmpeg --accept-package-agreements --accept-source-agreements --silent || true
+  winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements --silent || true
+  winget install -e --id jqlang.jq --accept-package-agreements --accept-source-agreements --silent || true
+  hash -r 2>/dev/null || true
+  return 0
+}
+
 install_deps_linux_apt() {
   say "Configuring Node.js 22.x (NodeSource) and system packages (sudo required)..."
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -523,6 +556,10 @@ install_all_system_dependencies() {
     install_deps_macos
     return $?
   fi
+  if host_is_windows_gitbash; then
+    install_deps_windows_gitbash
+    return $?
+  fi
   if [[ "$os" != "Linux" ]]; then
     say "Unsupported OS for automatic dependency install."
     return 1
@@ -542,6 +579,7 @@ install_all_system_dependencies() {
       say "Debian/Ubuntu and derivatives: https://github.com/nodesource/distributions then apt install ffmpeg python3 python3-venv python3-pip jq unzip build-essential"
       say "Fedora/RHEL family: dnf install nodejs npm ffmpeg python3 python3-pip jq unzip gcc gcc-c++ make (or NodeSource RPM setup_22.x)."
       say "Arch: pacman -S nodejs npm ffmpeg python jq unzip curl tar"
+      say "Windows: PowerShell: install.ps1 (or Git Bash + winget via this script when dependencies are missing)"
       return 1
       ;;
   esac
@@ -570,6 +608,13 @@ require_cmds() {
   return 0
 }
 
+python3_runtime_ok() {
+  command -v python3 >/dev/null 2>&1 && return 0
+  command -v py >/dev/null 2>&1 && py -3 -c "import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)" 2>/dev/null && return 0
+  command -v python >/dev/null 2>&1 && python -c "import sys; raise SystemExit(0 if sys.version_info[0] >= 3 else 1)" 2>/dev/null && return 0
+  return 1
+}
+
 ensure_runtime_after_install() {
   maybe_nvm
   if ! node_is_ok; then
@@ -577,7 +622,11 @@ ensure_runtime_after_install() {
     echo "Open a new terminal or run: hash -r  (with nvm: nvm install ${NODE_MIN_MAJOR} && nvm use ${NODE_MIN_MAJOR})" >&2
     return 1
   fi
-  require_cmds curl tar python3 ffmpeg ffprobe jq unzip || return 1
+  if ! python3_runtime_ok; then
+    echo "Python 3 is required (python3, py -3, or python on PATH)." >&2
+    return 1
+  fi
+  require_cmds curl tar ffmpeg ffprobe jq unzip || return 1
   return 0
 }
 
@@ -797,20 +846,27 @@ main() {
     need_install=true
     say_warn "Node.js ${NODE_MIN_MAJOR}+ required; current: $(node_version_line) ($(command -v node 2>/dev/null || echo no node on PATH))."
   fi
-  for c in ffmpeg ffprobe python3 jq unzip curl tar; do
+  for c in ffmpeg ffprobe jq unzip curl tar; do
     command -v "$c" >/dev/null 2>&1 || need_install=true
   done
+  if ! python3_runtime_ok; then
+    need_install=true
+  fi
   if [[ "$need_install" == true ]]; then
     say_warn "Missing or not usable on PATH (the server needs these for recording merge, audio, and local tools):"
     if ! node_is_ok; then
       say "  - Node.js ${NODE_MIN_MAJOR}+ (run: node --version)"
     fi
-    for c in ffmpeg ffprobe python3 jq unzip curl tar; do
+    if ! python3_runtime_ok; then
+      say "  - Python 3 (python3, py -3, or python)"
+    fi
+    for c in ffmpeg ffprobe jq unzip curl tar; do
       if ! command -v "$c" >/dev/null 2>&1; then
         say "  - ${c}"
       fi
     done
-    if prompt_yn "Install missing tools via Homebrew (macOS) or apt/dnf (Linux)? Uses sudo on Linux." "y"; then
+    local _dep_prompt="Install missing tools via Homebrew (macOS), apt/dnf/pacman (Linux), or winget (Windows Git Bash)? Uses sudo on Linux."
+    if prompt_yn "${_dep_prompt}" "y"; then
       install_all_system_dependencies || {
         echo "Automatic dependency install failed. Fix errors above, install prerequisites manually, then re-run." >&2
         exit 1
@@ -823,8 +879,8 @@ main() {
         hash -r 2>/dev/null || true
         maybe_nvm
       fi
-      if ! command -v python3 >/dev/null 2>&1; then
-        say_warn "python3 is still missing after package install; running a dedicated Python install step…"
+      if ! python3_runtime_ok; then
+        say_warn "Python 3 is still missing after package install; running a dedicated Python install step…"
         upgrade_python_on_host || say_warn "Dedicated Python install step did not complete; check errors above."
         hash -r 2>/dev/null || true
       fi
@@ -832,14 +888,14 @@ main() {
       if ! node_is_ok; then
         say_warn "Node.js ${NODE_MIN_MAJOR}+ is required. Install Node (e.g. https://nodejs.org/, nvm, or Homebrew) and re-run, or accept automatic dependency install when prompted."
       fi
-      if ! command -v python3 >/dev/null 2>&1; then
-        say_warn "python3 is required for openai-whisper (venv + pip). Install Python 3 (e.g. brew install python3; Debian/Ubuntu: sudo apt install python3 python3-venv python3-pip; Fedora: sudo dnf install python3 python3-pip) and re-run, or accept automatic dependency install when prompted."
+      if ! python3_runtime_ok; then
+        say_warn "Python 3 is required for openai-whisper (venv + pip). Install Python 3 or run install.ps1 on Windows, then re-run."
       fi
     fi
   else
     say_ok "Host dependency check passed — required tools are on PATH:"
     say_dim "  Video/audio: ffmpeg ($(command -v ffmpeg)), ffprobe ($(command -v ffprobe))"
-    say_dim "  Node $(node --version 2>/dev/null)  ·  python3 ($(command -v python3))  ·  jq ($(command -v jq))"
+    say_dim "  Node $(node --version 2>/dev/null)  ·  Python 3 OK  ·  jq ($(command -v jq))"
     say_dim "  Utilities: unzip, curl, tar"
   fi
 
@@ -948,21 +1004,41 @@ main() {
 
   banner "openai-whisper CLI (local STT, required)"
   local venv_whisper="${INSTALL_PREFIX}/venv-whisper"
-  if ! command -v python3 >/dev/null 2>&1; then
-    printf '%b%s%b\n' "${C_ERR}" "python3 is required on PATH for openai-whisper (local speech-to-text). Install Python 3, re-run host dependency install, or re-run this script." "${C_RST}" >&2
+  if ! python3_runtime_ok; then
+    printf '%b%s%b\n' "${C_ERR}" "Python 3 is required on PATH for openai-whisper (local speech-to-text). Install Python 3, re-run host dependency install, or re-run this script." "${C_RST}" >&2
     exit 1
   fi
-  python3 -m venv "${venv_whisper}"
-  "${venv_whisper}/bin/pip" install -U pip setuptools wheel
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -m venv "${venv_whisper}"
+  elif command -v py >/dev/null 2>&1; then
+    py -3 -m venv "${venv_whisper}"
+  else
+    python -m venv "${venv_whisper}"
+  fi
+  local pip_cmd whisper_exe_path
+  if [[ -x "${venv_whisper}/Scripts/pip.exe" ]]; then
+    pip_cmd="${venv_whisper}/Scripts/pip.exe"
+    whisper_exe_path="${venv_whisper}/Scripts/whisper.exe"
+  else
+    pip_cmd="${venv_whisper}/bin/pip"
+    whisper_exe_path="${venv_whisper}/bin/whisper"
+  fi
+  "${pip_cmd}" install -U pip setuptools wheel
   say_dim "Installing openai-whisper (plain CLI; not WhisperX)…"
-  "${venv_whisper}/bin/pip" install "openai-whisper"
-  local whisper_sh="${INSTALL_PREFIX}/bin/whisper"
+  "${pip_cmd}" install "openai-whisper"
   mkdir -p "${INSTALL_PREFIX}/bin"
-  cat >"${whisper_sh}" <<EOF
+  local whisper_sh
+  if host_is_windows_gitbash; then
+    whisper_sh="${INSTALL_PREFIX}/bin/whisper.cmd"
+    printf '%s\n' '@echo off' '"%~dp0..\venv-whisper\Scripts\whisper.exe" %*' >"${whisper_sh}"
+  else
+    whisper_sh="${INSTALL_PREFIX}/bin/whisper"
+    cat >"${whisper_sh}" <<EOF
 #!/usr/bin/env bash
-exec "${venv_whisper}/bin/whisper" "\$@"
+exec "${whisper_exe_path}" "\$@"
 EOF
-  chmod +x "${whisper_sh}"
+    chmod +x "${whisper_sh}"
+  fi
   merge_app_runtime_config_snippet "${INSTALL_PREFIX}" "" "" "" "" "" "${whisper_sh}" "" "0"
   tick_done "openai-whisper CLI ready (${whisper_sh})"
   bump_install_progress "openai-whisper"
@@ -1122,6 +1198,51 @@ printf 'Up to date: installed %s (latest GitHub release %s)\n' "${local_ver}" "$
 exit 0
 EOS
   chmod +x "${checker}"
+
+  if host_is_windows_gitbash; then
+    local wcmd="${INSTALL_PREFIX}/start-server.cmd"
+    printf '%s\r\n' '@echo off' 'cd /d "%~dp0"' 'node dist\index.js' >"${wcmd}"
+    local wbg="${INSTALL_PREFIX}/start-server-background.ps1"
+    cat >"${wbg}" <<'WBG'
+$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $ROOT
+$log = Join-Path $ROOT 'server.log'
+$port = 3001
+$cfgp = Join-Path $ROOT '.app-runtime-config.json'
+if (Test-Path $cfgp) {
+  try {
+    $cj = Get-Content $cfgp -Raw | ConvertFrom-Json
+    if ($cj.listenPort) { $port = [int]$cj.listenPort }
+  } catch { }
+}
+Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+$stamp = (Get-Date).ToString('u')
+Add-Content $log "`n===== $stamp starting (PORT=$port) ====="
+$p = Start-Process -FilePath 'node' -ArgumentList 'dist/index.js' -WorkingDirectory $ROOT -PassThru -WindowStyle Hidden `
+  -RedirectStandardOutput $log -RedirectStandardError $log
+$p.Id | Set-Content (Join-Path $ROOT 'server.pid')
+Write-Host "Started PID $($p.Id) — log $log"
+WBG
+    local wstop="${INSTALL_PREFIX}/stop-server.ps1"
+    cat >"${wstop}" <<'WST'
+$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$port = 3001
+$cfgp = Join-Path $ROOT '.app-runtime-config.json'
+if (Test-Path $cfgp) {
+  try {
+    $cj = Get-Content $cfgp -Raw | ConvertFrom-Json
+    if ($cj.listenPort) { $port = [int]$cj.listenPort }
+  } catch { }
+}
+Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+Remove-Item (Join-Path $ROOT 'server.pid') -ErrorAction SilentlyContinue
+Write-Host "Stopped listener on port $port (if any)."
+WST
+    say_dim "Also wrote start-server.cmd, start-server-background.ps1, stop-server.ps1 for native Windows."
+  fi
+
   tick_done "start/stop/background scripts + check-update.sh"
   bump_install_progress "Launcher"
 
@@ -1151,6 +1272,11 @@ EOS
   say_ok "Background + logs  ${starter_bg}  (appends ${INSTALL_PREFIX}/server.log, writes ${INSTALL_PREFIX}/server.pid)"
   say_ok "Stop server     ${stopper}"
   say_ok "Check updates   ${checker}  (shell: aicopilot-update)"
+  if host_is_windows_gitbash; then
+    say_ok "Windows CMD   ${INSTALL_PREFIX}/start-server.cmd"
+    say_ok "Windows bg    powershell -File ${INSTALL_PREFIX}/start-server-background.ps1"
+    say_ok "Windows stop  powershell -File ${INSTALL_PREFIX}/stop-server.ps1"
+  fi
   local _zshrc_done="${ZDOTDIR:-$HOME}/.zshrc"
   if [[ -f "${_zshrc_done}" ]] && grep -qF "${ZSH_LAUNCHER_MARKER}" "${_zshrc_done}" 2>/dev/null; then
     say_dim "Shell: ${C_BOLD}aicopilot${C_RST} · ${C_BOLD}aicopilot-bg${C_RST} · ${C_BOLD}aicopilot-stop${C_RST} · ${C_BOLD}aicopilot-update${C_RST} (source ${_zshrc_done} first)"

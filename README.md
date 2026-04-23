@@ -38,6 +38,14 @@ From a **clone** (interactive: keys, LLM menu, optional venvs):
 ./install.sh
 ```
 
+**Windows (native):** install [Node 20+](https://nodejs.org/), FFmpeg, Python 3.12, and `tar` (included in Windows 10+). Then in PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Or download [`install.ps1`](https://raw.githubusercontent.com/pramod-123/AiInterviewCopilot/main/install.ps1) and run it. Releases must include **`ai-interview-copilot-server-win-x64.tar.gz`** (built on each tag). **Git Bash** can run `./install.sh` instead (uses winget when prompted).
+
 ### Option B — Developers (from this repo)
 
 ```bash
