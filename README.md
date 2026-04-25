@@ -4,10 +4,20 @@
 
 ### Practice live coding interviews with recording, transcription, and AI feedback.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-9046FF.svg?style=for-the-badge)](./LICENSE)
-[![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-9046FF.svg?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-9046FF.svg?style=for-the-badge&logo=googlechrome&logoColor=white)](./browser-extension/chrome/)
-[![Local First](https://img.shields.io/badge/Local--first-Self--hosted-9046FF.svg?style=for-the-badge)](#installation)
+<p align="center">
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-9046FF.svg" alt="License">
+  </a>
+  <a href="server/package.json">
+    <img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg" alt="Node">
+  </a>
+  <a href="browser-extension/chrome/manifest.json">
+    <img src="https://img.shields.io/badge/Chrome-Extension-9046FF.svg" alt="Chrome Extension">
+  </a>
+  <a href="#installation">
+    <img src="https://img.shields.io/badge/Local--first-Self--hosted-9046FF.svg" alt="Local-first">
+  </a>
+</p>
 
 An open-source interview practice tool that helps you run realistic mock coding interviews from **LeetCode**, **HackerRank**, **Codeforces**, **AtCoder**, **CodeChef**, and **TopCoder**. InterviewCoach records your browser tab, microphone, and code timeline, then generates a transcript and structured feedback so you can review your performance before the real interview.
 
