@@ -39,7 +39,7 @@
     "@langchain/core": "^0.3.40",
     "@langchain/google-genai": "^0.1.12",
     "@langchain/ollama": "^0.2.1",
-    "@langchain/openai": "^0.3.17",
+    "@langchain/openai": "^1.4.5",
     "@libsql/client": "^0.17.2",
     "@prisma/adapter-libsql": "^7.6.0",
     "@prisma/client": "^7.6.0",
